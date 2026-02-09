@@ -3,116 +3,107 @@ import { instance } from "./axios.config.js";
 import { mockProducts } from "./mockData.js";
 
 export const productService = {
-  // ================= CREATE PRODUCT =================
+
+  /* ================= CREATE PRODUCT ================= */
   createProduct: async (productData) => {
     try {
       const formData = new FormData();
+
+      // Determine if this is a variant product
+      const variants = productData.variants?.length > 0 ? productData.variants : [];
+      const isVariantProduct = variants.length > 0;
 
       // Required fields
       const requiredFields = [
         "name",
         "description",
         "category",
-        "sellingPrice",
         "warranty",
         "returnPolicy",
         "hsnCode",
         "productKey",
       ];
 
-      requiredFields.forEach((field) => {
-        if (productData[field] !== undefined) {
+      requiredFields.forEach(field => {
+        if (productData[field] !== undefined && productData[field] !== null && productData[field] !== "") {
           formData.append(field, productData[field]);
+        } else {
+          throw { message: `${field} is required` };
         }
       });
+
+      // Non-variant products require SKU and sellingPrice
+      if (!isVariantProduct) {
+        if (!productData.sku) throw { message: "SKU is required for non-variant products" };
+        if (!productData.sellingPrice) throw { message: "sellingPrice is required for non-variant products" };
+        formData.append("sku", productData.sku);
+        formData.append("sellingPrice", productData.sellingPrice);
+        if (productData.mrp) formData.append("mrp", productData.mrp);
+        if (productData.stockQuantity !== undefined) formData.append("stockQuantity", productData.stockQuantity);
+        formData.append("stockStatus", productData.stockStatus ?? "in-stock");
+      } else {
+        // Variant product: append variants array
+        formData.append("variants", JSON.stringify(variants));
+      }
 
       // Optional fields
       const optionalFields = [
         "slug",
-        "sku",
         "brand",
-        "colour",
-        "size",
         "specification",
-        "mrp",
-        "discountPrice",
-        "stockQuantity",
-        "stockStatus",
         "weight",
         "dimensions",
         "barcode",
-        "resolution",
-        "screenSize",
+        "tags",
+        "supplier",
+        "shipping",
+        "isRecommended",
+        "status",
       ];
 
-      optionalFields.forEach((field) => {
+      optionalFields.forEach(field => {
         if (productData[field] !== undefined && productData[field] !== null) {
-          formData.append(field, productData[field]);
+          // Arrays or objects need to be stringified
+          if (Array.isArray(productData[field]) || typeof productData[field] === "object") {
+            formData.append(field, JSON.stringify(productData[field]));
+          } else {
+            formData.append(field, productData[field]);
+          }
         }
       });
 
-      // Boolean / Status fields
-      formData.append("isActive", productData.isActive ?? true);
-      formData.append("status", productData.status ?? "active");
-      formData.append("isRecommended", productData.isRecommended ?? false);
-
-      // Arrays
-      if (productData.variants && productData.variants.length > 0) {
-        formData.append("variants", productData.variants.join(","));
-      }
-      if (productData.tags && productData.tags.length > 0) {
-        formData.append("tags", productData.tags.join(","));
-      }
-
-      // Supplier
-      if (productData.supplier) {
-        const supplier = productData.supplier;
-        if (supplier.name) formData.append("supplier[name]", supplier.name);
-        if (supplier.contact) formData.append("supplier[contact]", supplier.contact);
-        if (supplier.email) formData.append("supplier[email]", supplier.email);
-      }
-
-      // Shipping
-      if (productData.shipping) {
-        const shipping = productData.shipping;
-        if (shipping.charges) formData.append("shipping[charges]", shipping.charges);
-        if (shipping.deliveryTime)
-          formData.append("shipping[deliveryTime]", shipping.deliveryTime);
-        if (shipping.restrictions)
-          formData.append("shipping[restrictions]", shipping.restrictions);
-      }
-
       // Images
-      if (productData.images && productData.images.length > 0) {
-        productData.images.forEach((image) => {
-          formData.append("images", image);
-        });
+      if (!productData.images || productData.images.length === 0) {
+        throw { message: "At least one product image is required" };
       }
+      productData.images.forEach(image => formData.append("images", image));
 
-      // Send POST request
+      // Send request
       const response = await instance.post("/products", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
+      console.log("✅ Product created successfully:", response.data);
       return response.data;
+
     } catch (error) {
-      console.error("Product creation error:", error);
+      console.error("❌ Product creation error:", error.response?.data || error);
       throw error.response?.data || error;
     }
   },
 
-  // ================= GET ALL PRODUCTS =================
+  /* ================= GET ALL PRODUCTS ================= */
   getProducts: async (filters = {}) => {
     try {
       const response = await instance.get("/products", { params: filters });
       return response.data;
     } catch (error) {
-      console.warn("API not available, returning mock products", error.message);
+      console.warn("API not available, returning mock products");
       return mockProducts;
     }
   },
 
-  // ================= GET PRODUCT BY ID =================
+  /* ================= GET PRODUCT BY ID ================= */
   getProductById: async (id) => {
     try {
       const response = await instance.get(`/products/${id}`);
@@ -122,42 +113,57 @@ export const productService = {
     }
   },
 
-  // ================= UPDATE PRODUCT =================
+  /* ================= UPDATE PRODUCT ================= */
   updateProduct: async (id, productData) => {
     try {
       const formData = new FormData();
 
-      // Append all fields (same logic as create)
+      // Determine if this is a variant product
+      const variants = productData.variants?.length > 0 ? productData.variants : [];
+      const isVariantProduct = variants.length > 0;
+
+      // Handle SKU and sellingPrice for non-variant products
+      if (!isVariantProduct) {
+        if (!productData.sku) throw { message: "SKU is required for non-variant products" };
+        if (!productData.sellingPrice) throw { message: "sellingPrice is required for non-variant products" };
+      }
+
       Object.entries(productData).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
-          if (Array.isArray(value)) {
-            formData.append(key, value.join(","));
-          } else if (typeof value === "object" && !(value instanceof File)) {
-            Object.entries(value).forEach(([subKey, subVal]) => {
-              formData.append(`${key}[${subKey}]`, subVal);
-            });
+          if (Array.isArray(value) || (typeof value === "object" && !(value instanceof File))) {
+            formData.append(key, JSON.stringify(value));
           } else {
             formData.append(key, value);
           }
         }
       });
 
+      // Images
+      if (productData.images && productData.images.length > 0) {
+        productData.images.forEach(image => formData.append("images", image));
+      }
+
       const response = await instance.put(`/products/${id}`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
+      console.log("✅ Product updated:", response.data);
       return response.data;
+
     } catch (error) {
+      console.error("❌ Product update error:", error.response?.data || error);
       throw error.response?.data || error;
     }
   },
 
-  // ================= DELETE PRODUCT =================
+  /* ================= DELETE PRODUCT ================= */
   deleteProduct: async (id) => {
     try {
       const response = await instance.delete(`/products/${id}`);
+      console.log("✅ Product deleted:", response.data);
       return response.data;
     } catch (error) {
+      console.error("❌ Product delete error:", error.response?.data || error);
       throw error.response?.data || error;
     }
   },

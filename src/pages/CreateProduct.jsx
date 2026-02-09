@@ -9,7 +9,6 @@ const BACKEND_URL = "https://miltronix-backend-1.onrender.com";
 function CreateProduct() {
   const navigate = useNavigate();
 
-  const [productCode, setProductcode] = useState([]);
   const initialFormState = {
     name: "",
     slug: "",
@@ -22,33 +21,23 @@ function CreateProduct() {
     stockStatus: "in-stock",
     description: "",
     specification: "",
-    colour: "",
-    size: "",
-    variants: "",
+    variants: [{ color: "", size: "", price: "", stock: "", sku: "" }],
     brand: "",
-    weight: "",
-    dimensions: "",
     tags: "",
     warranty: "",
     returnPolicy: "",
     barcode: "",
-    supplier: {
-      name: "",
-      contact: "",
-      email: "",
-    },
     hsnCode: "",
-    shipping: {
-      charges: "",
-      deliveryTime: "",
-      restrictions: "",
-    },
+    productKey: "",
+    supplier: { name: "", contact: "", email: "" },
+    shipping: { charges: "", deliveryTime: "", restrictions: "" },
+    weight: "",
+    dimensions: "",
+    resolution: "",
+    screenSize: "",
     isActive: true,
     status: "Active",
     isRecommended: false,
-    resolution: "",
-    screenSize: "",
-    productKey: "",
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -64,28 +53,16 @@ function CreateProduct() {
     const fetchCategories = async () => {
       try {
         const res = await categoryService.getCategories();
-
-        console.log("Categories API Response:", res); // debug
-
-        // ✅ handle both response types
         const categoryList = res.data || res;
-
         setCategories(categoryList);
-
         if (categoryList.length > 0) {
-          setFormData((prev) => ({
-            ...prev,
-            category: categoryList[0]._id,
-          }));
+          setFormData((prev) => ({ ...prev, category: categoryList[0]._id }));
         }
       } catch (error) {
         console.error("Error fetching categories:", error);
-        setError(
-          "Failed to load categories. Please try creating some categories first.",
-        );
+        setError("Failed to load categories. Please create categories first.");
       }
     };
-
     fetchCategories();
   }, []);
 
@@ -105,7 +82,6 @@ function CreateProduct() {
       .replace(/^-+|-+$/g, "");
   };
 
-  // Function to validate pricing
   const validatePricing = (price, mrp) => {
     if (price && mrp && parseFloat(price) > parseFloat(mrp)) {
       setPriceValidationMessage("⚠️ Selling price cannot be higher than MRP");
@@ -115,79 +91,68 @@ function CreateProduct() {
   };
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
+    const val = type === "checkbox" ? checked : value;
+
     setFormData((prev) => {
-      // Handle nested objects (supplier, shipping)
       if (name.includes(".")) {
         const [parent, child] = name.split(".");
-        const newData = {
-          ...prev,
-          [parent]: {
-            ...prev[parent],
-            [child]: value,
-          },
-        };
-        return newData;
+        return { ...prev, [parent]: { ...prev[parent], [child]: val } };
       }
 
-      const newData = {
-        ...prev,
-        [name]: value,
-      };
-
-      if (name === "name") {
-        newData.slug = generateSlug(value);
-      }
-
-      // Real-time price validation
+      const newData = { ...prev, [name]: val };
+      if (name === "name") newData.slug = generateSlug(val);
       if (name === "price" || name === "mrp") {
-        const currentPrice = name === "price" ? value : newData.price;
-        const currentMrp = name === "mrp" ? value : newData.mrp;
+        const currentPrice = name === "price" ? val : newData.price;
+        const currentMrp = name === "mrp" ? val : newData.mrp;
         validatePricing(currentPrice, currentMrp);
       }
-
       return newData;
     });
   };
 
+  // ================= VARIANT FUNCTIONS =================
+  const handleVariantChange = (index, field, value) => {
+    const updatedVariants = [...formData.variants];
+    updatedVariants[index][field] = value;
+    setFormData((prev) => ({ ...prev, variants: updatedVariants }));
+  };
+
+  const addVariant = () => {
+    setFormData((prev) => ({
+      ...prev,
+      variants: [
+        ...prev.variants,
+        { color: "", size: "", price: "", stock: "", sku: "" },
+      ],
+    }));
+  };
+
+  const removeVariant = (index) => {
+    const updated = formData.variants.filter((_, i) => i !== index);
+    setFormData((prev) => ({ ...prev, variants: updated }));
+  };
+
+  // ================= IMAGE FUNCTIONS =================
   const handleImageUpload = (files) => {
-    const validImageTypes = [
+    const validTypes = [
       "image/jpeg",
       "image/jpg",
       "image/png",
       "image/gif",
       "image/webp",
     ];
-    const currentImageCount = images.length;
-    const maxImages = 6;
-
-    if (currentImageCount >= maxImages) {
-      setError(
-        `Maximum ${maxImages} images allowed. Please remove some images first.`,
-      );
-      return;
-    }
-
-    const remainingSlots = maxImages - currentImageCount;
-    const filesToProcess = Array.from(files).slice(0, remainingSlots);
-
-    if (files.length > remainingSlots) {
-      setError(
-        `Only ${remainingSlots} more images can be added (${maxImages} total allowed).`,
-      );
-    }
+    const maxImages = 5; // 🔥 change here
+    const remaining = maxImages - images.length;
+    const filesToProcess = Array.from(files).slice(0, remaining);
 
     const validFiles = filesToProcess.filter((file) => {
-      if (!validImageTypes.includes(file.type)) {
-        setError(
-          `Invalid file type: ${file.name}. Please upload only JPG, PNG, GIF, or WebP images.`,
-        );
+      if (!validTypes.includes(file.type)) {
+        setError(`Invalid type: ${file.name}`);
         return false;
       }
       if (file.size > 5 * 1024 * 1024) {
-        setError(
-          `File too large: ${file.name}. Please upload images smaller than 5MB.`,
-        );
+        setError(`File too large: ${file.name}`);
         return false;
       }
       return true;
@@ -201,189 +166,154 @@ function CreateProduct() {
     setImages((prev) => [...prev, ...newImages]);
   };
 
-  const handleFileSelect = (e) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      handleImageUpload(files);
-    }
-  };
-
+  const handleFileSelect = (e) => handleImageUpload(e.target.files);
   const handleDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      handleImageUpload(files);
-    }
+    handleImageUpload(e.dataTransfer.files);
   };
-
   const handleDragOver = (e) => {
     e.preventDefault();
     setDragOver(true);
   };
-
   const handleDragLeave = (e) => {
     e.preventDefault();
     setDragOver(false);
   };
-
   const removeImage = (id) => {
     setImages((prev) => {
       const updated = prev.filter((img) => img.id !== id);
-
       const removed = prev.find((img) => img.id === id);
-      if (removed) {
-        URL.revokeObjectURL(removed.preview);
-      }
+      if (removed) URL.revokeObjectURL(removed.preview);
       return updated;
     });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
+  // ================= SUBMIT =================
+ const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError("");
+  setSuccess("");
 
-    // ===== BASIC VALIDATIONS =====
+  try {
+    // Required fields check
     if (
       !formData.name ||
-      !formData.price ||
+      (!formData.price && formData.variants.length === 0) ||
       !formData.description ||
       !formData.category ||
-      !formData.sku ||
       !formData.brand ||
-      !formData.colour ||
       !formData.warranty ||
       !formData.returnPolicy ||
       !formData.hsnCode
     ) {
-      setError(
-        "Please fill in all required fields (Name, SKU, Price, Description, Category, Brand, Colour, Warranty, Return Policy, HSN Code)",
-      );
+      setError("Please fill all required fields");
       return;
     }
-
-    // SKU numeric check
-    if (isNaN(formData.sku)) {
-      setError("SKU must be a number");
-      return;
-    }
-
-    // Slug and Product Key
-    const slug = generateSlug(formData.name);
-    const productKey = slug + "-" + Date.now(); // unique key
 
     // Price validations
-    if (parseFloat(formData.price) <= 0) {
-      setError("Price must be greater than 0");
+    if (formData.price && parseFloat(formData.price) <= 0) {
+      setError("Selling price must be greater than 0");
       return;
     }
 
-    if (formData.mrp && parseFloat(formData.price) > parseFloat(formData.mrp)) {
+    if (
+      formData.mrp &&
+      formData.price &&
+      parseFloat(formData.price) > parseFloat(formData.mrp)
+    ) {
       setError("Selling price cannot be higher than MRP");
       return;
     }
 
-    if (
-      formData.discountPrice &&
-      parseFloat(formData.discountPrice) > parseFloat(formData.price)
-    ) {
-      setError("Discount price cannot be more than selling price");
-      return;
-    }
-
-    // Stock Quantity
     if (formData.stockQuantity && parseInt(formData.stockQuantity) < 0) {
-      setError("Stock quantity cannot be negative");
+      setError("Stock cannot be negative");
       return;
     }
 
-    // Supplier validation
-    if (
-      !formData.supplier.name ||
-      formData.supplier.name.length < 3 ||
-      !formData.supplier.contact ||
-      !/^[6-9]\d{9}$/.test(formData.supplier.contact) ||
-      !formData.supplier.email ||
-      !/^[a-zA-Z0-9._%+-]+@gmail\.com$/.test(formData.supplier.email)
-    ) {
-      setError(
-        "Please enter valid supplier details (name, 10-digit number, Gmail email)",
-      );
-      return;
-    }
-
-    // Shipping validation
-    if (
-      !formData.shipping.charges ||
-      !formData.shipping.deliveryTime ||
-      !formData.shipping.restrictions ||
-      isNaN(formData.shipping.charges) ||
-      formData.shipping.charges < 0
-    ) {
-      setError("Please enter valid shipping details");
-      return;
-    }
-
-    // HSN Code
+    // HSN code validation
     if (!/^\d{2}(\d{2})?(\d{2})?$/.test(formData.hsnCode)) {
       setError("HSN must be 2, 4, or 6 digits");
       return;
     }
 
-    // Images check
     if (images.length === 0) {
-      setError("Please upload at least one product image");
+      setError("Upload at least one product image");
       return;
     }
 
-    // ===== BUILD PRODUCT DATA OBJECT =====
+    setLoading(true);
+
+    const slug = generateSlug(formData.name);
+    const productKey = formData.productKey || slug + "-" + Date.now();
+
+    // Filter empty variants
+    const cleanedVariants = formData.variants.filter(
+      (v) => v.color || v.size || v.price || v.stock
+    );
+
+    // Generate SKU for main product if no variants
+    const mainProductSKU =
+      cleanedVariants.length === 0
+        ? `${productKey}-main-${Date.now()}`
+        : undefined;
+
     const productData = {
       ...formData,
       slug,
       productKey,
-      sellingPrice: parseFloat(formData.price),
-      mrp: formData.mrp ? parseFloat(formData.mrp) : null,
+      sku: mainProductSKU, // <-- main product SKU
+      sellingPrice:
+        cleanedVariants.length === 0 && formData.price
+          ? parseFloat(formData.price)
+          : undefined,
+      mrp:
+        cleanedVariants.length === 0 && formData.mrp
+          ? parseFloat(formData.mrp)
+          : undefined,
       discountPrice: formData.discountPrice
         ? parseFloat(formData.discountPrice)
-        : null,
-      stockQuantity: parseInt(formData.stockQuantity) || 0,
-      supplier: { ...formData.supplier },
-      shipping: { ...formData.shipping },
-      variants: formData.variants
-        ? formData.variants.split(",").map((v) => v.trim())
+        : undefined,
+      variants: cleanedVariants.map((v) => ({
+        color: v.color,
+        size: v.size,
+        price: v.price ? parseFloat(v.price) : 0,
+        stock: v.stock ? parseInt(v.stock) : 0,
+        sku:
+          v.sku ||
+          `${productKey}-${v.color || "NA"}-${v.size || "NA"}-${Date.now()}`,
+      })),
+      tags: formData.tags
+        ? formData.tags.split(",").map((t) => t.trim())
         : [],
-      tags: formData.tags ? formData.tags.split(",").map((t) => t.trim()) : [],
       images: images.map((img) => img.file),
-      status: formData.status.toLowerCase(),
+      weight: formData.weight || "",
+      dimensions: formData.dimensions || "",
+      resolution: formData.resolution || "",
+      screenSize: formData.screenSize ? parseFloat(formData.screenSize) : undefined,
+      supplier: [formData.supplier],
+      shipping: [formData.shipping],
+      status: formData.isActive ? "active" : "inactive",
       isRecommended: !!formData.isRecommended,
-      isActive: !!formData.isActive,
     };
 
-    console.log("Submitting product data:", {
-      ...productData,
-      images: `${productData.images.length} images`,
-    });
+    console.log("Submitting product data:", productData);
 
-    setLoading(true);
+    const result = await productService.createProduct(productData);
+    setSuccess("Product created successfully!");
+    console.log("Backend response:", result);
 
-    try {
-      const result = await productService.createProduct(productData);
+    images.forEach((img) => URL.revokeObjectURL(img.preview));
+    resetForm();
+    setTimeout(() => navigate("/products/grid"), 1500);
+  } catch (err) {
+    console.error("Submit error:", err);
+    setError(err.response?.message || err.message || "Failed to create product");
+  } finally {
+    setLoading(false);
+  }
+};
 
-      console.log("Product creation result:", result);
-
-      setSuccess("Product created successfully!");
-      images.forEach((img) => URL.revokeObjectURL(img.preview));
-      resetForm();
-
-      setTimeout(() => navigate("/products/grid"), 1500);
-    } catch (error) {
-      console.error("Error creating product:", error);
-      setError(error.message || "Failed to create product");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div>
@@ -610,7 +540,7 @@ function CreateProduct() {
                   </small>
                 </div>
 
-                <div className="form-group">
+                {/* <div className="form-group">
                   <label htmlFor="sku">SKU / Product Code *</label>
                   <input
                     type="text"
@@ -624,7 +554,7 @@ function CreateProduct() {
                   <small className="form-hint">
                     Unique identifier for this product
                   </small>
-                </div>
+                </div> */}
 
                 <div className="form-group">
                   <label htmlFor="brand">Brand / Manufacturer</label>
@@ -694,43 +624,126 @@ function CreateProduct() {
                   </select>
                 </div>
 
-                <div className="form-group">
-                  <label htmlFor="colour">Color</label>
-                  <input
-                    type="text"
-                    id="colour"
-                    name="colour"
-                    value={formData.colour}
-                    onChange={handleInputChange}
-                    placeholder="Enter product color"
-                  />
-                </div>
+                <div className="content-card">
+                  <h3>Product Variants</h3>
 
-                <div className="form-group">
-                  <label htmlFor="size">Size</label>
-                  <input
-                    type="text"
-                    id="size"
-                    name="size"
-                    value={formData.size}
-                    onChange={handleInputChange}
-                    placeholder="Enter product size"
-                  />
-                </div>
+                  {formData.variants.map((variant, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "12px",
+                        borderRadius: "6px",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Color</label>
+                          <input
+                            type="text"
+                            value={variant.color}
+                            onChange={(e) =>
+                              handleVariantChange(
+                                index,
+                                "color",
+                                e.target.value,
+                              )
+                            }
+                            placeholder="Red"
+                          />
+                        </div>
 
-                <div className="form-group">
-                  <label htmlFor="variants">Color / Size / Variants</label>
-                  <input
-                    type="text"
-                    id="variants"
-                    name="variants"
-                    value={formData.variants}
-                    onChange={handleInputChange}
-                    placeholder="e.g., Red, Blue, Green OR S, M, L, XL"
-                  />
-                  <small className="form-hint">
-                    Separate multiple variants with commas
-                  </small>
+                        <div className="form-group">
+                          <label>Size</label>
+                          <input
+                            type="text"
+                            value={variant.size}
+                            onChange={(e) =>
+                              handleVariantChange(index, "size", e.target.value)
+                            }
+                            placeholder="M / L / XL"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Variant Price</label>
+                          <input
+                            type="number"
+                            value={variant.price}
+                            onChange={(e) =>
+                              handleVariantChange(
+                                index,
+                                "price",
+                                e.target.value,
+                              )
+                            }
+                            placeholder="Enter price"
+                          />
+                        </div>
+
+                        <div className="form-group">
+                          <label>Variant Stock</label>
+                          <input
+                            type="number"
+                            value={variant.stock}
+                            onChange={(e) =>
+                              handleVariantChange(
+                                index,
+                                "stock",
+                                e.target.value,
+                              )
+                            }
+                            placeholder="Stock qty"
+                          />
+                        </div>
+
+                        <div className="form-group">
+                          <label>Variant SKU *</label>
+                          <input
+                            type="text"
+                            value={variant.sku}
+                            onChange={(e) =>
+                              handleVariantChange(index, "sku", e.target.value)
+                            }
+                            placeholder="Enter variant SKU"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeVariant(index)}
+                        style={{
+                          background: "#dc2626",
+                          color: "#fff",
+                          border: "none",
+                          padding: "5px 10px",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Remove Variant
+                      </button>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={addVariant}
+                    style={{
+                      background: "#2563eb",
+                      color: "#fff",
+                      border: "none",
+                      padding: "8px 12px",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    + Add Variant
+                  </button>
                 </div>
               </div>
 

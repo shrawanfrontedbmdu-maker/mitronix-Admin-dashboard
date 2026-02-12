@@ -19,6 +19,7 @@ function StatsCards() {
     const fetchDashboardStats = async () => {
       try {
         const stats = await dashboardService.getDashboardStats()
+        console.log('Fetched dashboard stats:', stats)
         setDashboardStats(stats)
       } catch (error) {
         console.error('Failed to fetch dashboard stats:', error)

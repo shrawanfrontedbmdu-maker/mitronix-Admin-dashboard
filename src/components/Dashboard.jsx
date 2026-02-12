@@ -11,93 +11,42 @@ import { useState, useEffect } from "react";
 import { healthService } from "../api/healthService.js";
 import axios from "axios";
 
-function Dashboard() {
-  const [apiStatus, setApiStatus] = useState('checking')
+function Dashboard({ onLogin }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const navigate = useNavigate()
-
-  const handleLogout = async () => {
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-      setError("You are not logged in");
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError("");
-      await axios.post(
-        "http://localhost:3000/api/auth/admin/logout",
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      setIsLoggedIn(false);
-
-      navigate("/login");
-    } catch (err) {
-      console.error(err);
-      setError("Logout failed. Try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [adminData, setAdminData] = useState(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("adminToken");
+    const adminData = localStorage.getItem("adminData");
+    if (adminData) {
+      setAdminData(JSON.parse(adminData));
+    }
     setIsLoggedIn(!!token);
   }, []);
 
   useEffect(() => {
     const checkApiConnection = async () => {
       try {
-        await healthService.checkConnection()
-        setApiStatus('connected')
+        await healthService.checkConnection();
+        setApiStatus("connected");
       } catch (error) {
-        setApiStatus('disconnected')
+        setApiStatus("disconnected");
       }
-    }
+    };
 
-    checkApiConnection()
-  }, [])
+    checkApiConnection();
+  }, []);
 
-  if(error){
+  if (error) {
     alert(error);
   }
-  
+
   return (
     <div>
       <div className="dashboard-header">
-        <div className="welcome-section">
-          <h1>WELCOME!</h1>
-        </div>
-
-        <div className="header-actions">
-          <div className="notification-icon">
-            <IoMdNotifications className="icons" size={24} color="grey" />
-          </div>        
-          {isLoggedIn ? (
-            <div
-              className="user-avatar-icon"
-              style={{ cursor: "pointer" }}
-              onClick={handleLogout}
-            >
-              <MdLogout size={28} color="red" />
-            </div>
-          ) : (
-            <Link to="/login" className="user-avatar-link">
-              <div className="user-avatar-icon">
-                <MdPerson size={28} />
-              </div>
-            </Link>
-          )}
+        <div>
+          <h1 className="text-2xl font-bold text-red-800">WELCOME!</h1>
         </div>
       </div>
 

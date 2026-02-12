@@ -1,7 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
+@import "tailwindcss";
 
 :root {
   --primary-gold: #ffc007;
@@ -9,6 +6,10 @@
   --primary-gold-light: #ffcf33;
   --primary-gold-bg: rgba(255, 192, 7, 0.1);
   --primary-gold-bg-light: rgba(255, 192, 7, 0.02);
+}
+
+::-webkit-scrollbar {
+  display: none;
 }
 
 @keyframes spin {
@@ -956,15 +957,41 @@ body {
     min-height: 100vh;
   }
 
-  /* Sidebar responsiveness */
+  /* Sidebar Styles with Backdrop Effect */
+.sidebar {
+  backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: #000;
+  color: white;
+  padding: 0;
+  flex-shrink: 0;
+  transition: width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  overflow: hidden;
+  position: relative;
+  will-change: width;
+}
+
+/* Hide scrollbar but keep scroll functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
+/* Sidebar responsiveness */
+@media (max-width: 768px) {
   .sidebar {
     width: 100%;
     height: auto;
     position: sticky;
     top: 0;
     z-index: 1000;
-    border-bottom: 1px solid #fff;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
+}
 
   .sidebar.expanded {
     width: 100%;
@@ -2607,14 +2634,6 @@ body {
   border-bottom: 1px solid #e2e8f0;
 }
 
-.welcome-section h1 {
-  font-size: 32px;
-  font-weight: 700;
-  color: #1a202c;
-  margin: 0;
-  letter-spacing: -0.025em;
-}
-
 .api-status-row {
   display: flex;
   align-items: center;
@@ -2684,7 +2703,7 @@ body {
 }
 
 /* Sidebar Styles */
-.sidebar {
+/* .sidebar {
   width: 60px;
   background-color: #000;
   color: white;
@@ -2694,7 +2713,7 @@ body {
   overflow: hidden;
   position: relative;
   will-change: width;
-}
+} */
 
 .sidebar.expanded {
   width: 240px;
@@ -3121,16 +3140,6 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.welcome-section h1 {
-  font-size: 24px;
-  font-weight: 600;
-  margin-bottom: 5px;
-  background: #000;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
 }
 
 .welcome-message {
@@ -3944,10 +3953,10 @@ th {
     flex-direction: column;
   }
 
-  .sidebar {
+  /* .sidebar {
     width: 100%;
     height: auto;
-  }
+  } */
 
   .stats-grid {
     grid-template-columns: 1fr;
@@ -5302,10 +5311,10 @@ th {
 }
 
 /* Enhanced Sidebar */
-.sidebar {
+/* .sidebar {
   backdrop-filter: blur(20px);
   border-right: 1px solid rgba(255, 255, 255, 0.1);
-}
+} */
 
 /* Modern Focus States */
 *:focus {

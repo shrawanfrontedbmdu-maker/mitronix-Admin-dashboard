@@ -96,7 +96,7 @@ export const productService = {
   getProducts: async (filters = {}) => {
     try {
       const response = await instance.get("/products", { params: filters });
-      return response.data;
+      return response.data.products;
     } catch (error) {
       console.warn("API not available, returning mock products");
       return mockProducts;

@@ -23,6 +23,7 @@ function ProductList() {
         productService.getProducts(),
         categoryService.getCategories(),
       ]);
+      console.log("Fetched products:", productsRes);
 
       setProducts(productsRes || []);
       setCategories(categoriesRes || []);

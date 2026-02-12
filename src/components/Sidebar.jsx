@@ -1,325 +1,204 @@
-import { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import {
-  MdDashboard,
-  MdShoppingBag,
-  MdCategory,
-  MdShoppingCart,
-  MdReceipt,
-  MdSettings,
-  MdPerson,
-  MdPersonPin,
-  MdGroup,
-  MdSecurity,
-  MdNotificationAdd,
-  MdReceiptLong,
-  MdRoomService,
-  MdElectricalServices,
-  MdMiscellaneousServices,
-  MdArticle,
-  MdViewCarousel,
-  MdAdminPanelSettings,
-  MdChevronLeft,
-  MdChevronRight,
-  MdCardGiftcard,
-  MdLightbulb,
-  MdFilterAlt
-} from 'react-icons/md'
+import { useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import Link from "./Link";
+import { MdLogout } from "react-icons/md";
+import { MdExpandMore, MdExpandLess } from "react-icons/md";
 
-function Sidebar() {
-  const [isCollapsed, setIsCollapsed] = useState(true)
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const [openMenu, setOpenMenu] = useState(null)
-  const location = useLocation()
+export default function Sidebar({ onLogout }) {
+  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [openDropdowns, setOpenDropdowns] = useState({});
+  const location = useLocation();
 
+  const isActive = (item) => {
+    if (item.match) {
+      return location.pathname.startsWith(item.match);
+    }
+    return location.pathname === item.path;
+  };
 
-  const isActive = (path) => location.pathname === path
+  const toggleDropdown = (index) => {
+    setOpenDropdowns((prev) => ({
+      ...prev,
+      [index]: !prev[index],
+    }));
+  };
 
-  const closeMenus = () => setOpenMenu(null)
+  const handleNavClick = () => {
+    // Close mobile menu when a nav item is clicked
+    setIsMobileOpen(false);
+  };
 
   return (
-    <div
-      className={`sidebar ${isCollapsed ? 'collapsed' : 'expanded'} ${isMobileMenuOpen ? 'mobile-open' : ''}`}
-      onMouseEnter={() => setIsCollapsed(false)}
-      onMouseLeave={() => setIsCollapsed(true)}
-    >
-      <div className="sidebar-header">
-        <div className="sidebar-logo">
-          <div className="logo-icon">
-            <span><img className="logo-image" src="https://dapper-maamoul-8bc20d.netlify.app/image/Mittronix-logo-black.png" alt="Logo" /></span>
+    <>
+      {/* Mobile Hamburger Button */}
+      <button
+        className="fixed md:hidden top-4 left-4 z-40 rounded hover:bg-gray-900 text-white font-bold flex items-center justify-center w-10 h-10 bg-black border border-gray-700"
+        onClick={() => setIsMobileOpen(!isMobileOpen)}
+        aria-label="Toggle sidebar"
+      >
+        ☰
+      </button>
+
+      {/* Sidebar */}
+      <div
+        className={` bg-black
+      fixed md:relative top-0 left-0 h-screen
+      shadow-lg 
+      transform transition-transform duration-300 z-50
+      ${isMobileOpen ? "translate-x-0" : "-translate-x-full"}
+      md:translate-x-0
+      overflow-hidden scrollbar-hide flex flex-col
+      ${isMobileOpen ? "w-64" : isCollapsed ? "w-20" : "w-64"}
+    `}
+        onMouseEnter={() => !isMobileOpen && setIsCollapsed(false)}
+        onMouseLeave={() => !isMobileOpen && setIsCollapsed(true)}
+      >
+        {/* SIDEBAR HEADER */}
+        <div className="sidebar-header p-4 border-b border-gray-700 ">
+          <div className="sidebar-logo flex items-center gap-2">
+            <div className="logo-icon ">
+              <img
+                className="logo-image w-8 h-8"
+                src="https://dapper-maamoul-8bc20d.netlify.app/image/Mittronix-logo-black.png"
+                alt="Logo"
+              />
+            </div>
+            {(isMobileOpen || !isCollapsed) && (<span className="font-bold text-white text-xl whitespace-nowrap ">Mittronix</span>)}
+            {/* Close button for mobile */}
+            <button
+              className="md:hidden text-white text-xl font-bold ml-auto "
+              onClick={() => setIsMobileOpen(false)}
+              aria-label="Close sidebar"
+            >
+              ✕
+            </button>
           </div>
-          {!isCollapsed && <span className="logo-text">Mittronix</span>}
+        </div>
+
+        {/* MAIN NAVIGATION - SCROLLABLE */}
+        
+        <div className=" flex-1 overflow-y-auto scrollbar-hide text-white">
+          {Link.map((item, index) => {
+            const Icon = item.icon;
+            const isDropdown = item.children && item.children.length > 0;
+            const isOpen = openDropdowns[index];
+            const itemIsActive = isActive(item);
+
+            if (isDropdown) {
+              return (
+                <div
+                  key={index}
+                  className={`nav-group ${
+                    itemIsActive ? " border-l-4 border-blue-400" : ""
+                  }`}
+                >
+                  {/* Dropdown Toggle Button */}
+                  <button
+                    onClick={() => toggleDropdown(index)}
+                    className={`w-full nav-item flex items-center justify-between px-4 py-3 hover:bg-gray-900 transition text-white ${
+                      itemIsActive ? "text-blue-400 font-semibold bg-gray-900" : ""
+                    }`}
+                    title={isCollapsed ? item.label : ""}
+                  >
+                    <div className="flex items-center gap-3 flex-1">
+                      <span className="nav-icon  flex items-center justify-center">
+                        <Icon size={20} />
+                      </span>
+                      {(isMobileOpen || !isCollapsed) && (
+                        <span className="text-sm whitespace-nowrap">{item.label}</span>
+                      )}
+                    </div>
+                    {(isMobileOpen || !isCollapsed) && (
+                      <span className=" transition-transform ">
+                        {isOpen ? (
+                          <MdExpandLess size={18} />
+                        ) : (
+                          <MdExpandMore size={18} />
+                        )}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Dropdown Items */}
+                  {isOpen && (isMobileOpen || !isCollapsed) && (
+                    <div className="nav-sublist border-l-2 border-gray-700 bg-gray-900">
+                      {item.children.map((child, childIndex) => (
+                        <NavLink
+                          key={childIndex}
+                          to={child.path}
+                          className={({ isActive: linkIsActive }) =>
+                            `nav-subitem px-4 py-2 text-xs flex items-center gap-2 transition text-gray-300 ${
+                              linkIsActive
+                                ? "text-blue-400 font-semibold bg-gray-800"
+                                : "hover:bg-gray-800"
+                            }`
+                          }
+                          onClick={handleNavClick}
+                        >
+                          {child.label}
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // Regular NavLink
+            return (
+              <NavLink
+                key={index}
+                to={item.path}
+                className={({ isActive: linkIsActive }) =>
+                  `nav-item flex items-center gap-3 px-4 py-3 hover:bg-gray-900 transition text-gray-300 justify-start ${
+                    linkIsActive
+                      ? "bg-gray-900 text-blue-400 border-l-4 border-blue-400 font-semibold"
+                      : ""
+                  }`
+                }
+                onClick={handleNavClick}
+                title={isCollapsed ? item.label : ""}
+              >
+                <span className="nav-icon  flex items-center justify-center">
+                  <Icon size={20} />
+                </span>
+                {(isMobileOpen || !isCollapsed) && (
+                  <span className="text-sm whitespace-nowrap">{item.label}</span>
+                )}
+              </NavLink>
+            );
+          })}
+        </div>
+
+        {/* Logout Button - Sticky at Bottom */}
+        <div className="border-t border-gray-700 p-4 ">
+          <button
+            onClick={() => {
+              onLogout();
+              setIsMobileOpen(false);
+            }}
+            className="w-full nav-item flex items-center gap-3 px-4 py-3 hover:bg-red-900 text-red-400 rounded transition justify-start"
+            title={isCollapsed ? "Logout" : ""}
+          >
+            <span className="nav-icon  flex items-center justify-center">
+              <MdLogout size={20} />
+            </span>
+            {(isMobileOpen || !isCollapsed) && (
+              <span className="text-sm font-semibold">Logout</span>
+            )}
+          </button>
         </div>
       </div>
 
-      <div className="sidebar-section">
-        {/* Dashboard */}
-        <Link
-          to="/dashboard"
-          className={`nav-item ${isActive('/dashboard') || isActive('/') ? 'active' : ''}`}
-          onClick={closeMenus}
-        >
-          <span className="nav-icon">
-            <MdDashboard size={20} />
-          </span>
-          {!isCollapsed && <span className="nav-text">Dashboard</span>}
-        </Link>
-
-        {/* InfoCard */}
-        <Link
-          to="/infosection/list"
-          className={`nav-item ${isActive('/infosection/list') ? 'active' : ''}`}
-        >
-          <span className="nav-icon">
-            <MdCardGiftcard size={20} />
-          </span>
-          {!isCollapsed && <span className="nav-text">InfoCard</span>}
-        </Link>
-
-        {/* Recommendations */}
-        <Link
-          to="/recommendations"
-          className={`nav-item ${isActive('/recommendations') ? 'active' : ''}`}
-        >
-          <span className="nav-icon">
-            <MdLightbulb size={20} />
-          </span>
-          {!isCollapsed && <span className="nav-text">Recommendations</span>}
-        </Link>
-
-        {/* Filter */}
-        <Link
-          to="/filter"
-          className={`nav-item ${isActive('/filter') ? 'active' : ''}`}
-        >
-          <span className="nav-icon">
-            <MdFilterAlt size={20} />
-          </span>
-          {!isCollapsed && <span className="nav-text">Filter</span>}
-        </Link>
-
-        {/* Products */}
-        <Link
-          to="/products/list"
-          className={`nav-item ${location.pathname.startsWith('/products') ? 'active' : ''}`}
-        >
-          <span className="nav-icon">
-            <MdShoppingBag size={20} />
-          </span>
-          {!isCollapsed && <span className='nav-text'>Products</span>}
-        </Link>
-
-        {/* Categories */}
-        <Link
-          to="/categories/list"
-          className={`nav-item ${location.pathname.startsWith('/categories') ? 'active' : ''}`}
-        >
-          <span className="nav-icon">
-            <MdCategory size={20} />
-          </span>
-          {!isCollapsed && <span className='nav-text'>Categories</span>}
-        </Link>
-
-        {/* Brands */}
-        <Link
-          to="/brands/list"
-          className={`nav-item ${location.pathname.startsWith('/brands') ? 'active' : ''}`}
-        >
-          <span className="nav-icon">
-            <MdGroup size={20} />
-          </span>
-          {!isCollapsed && <span className='nav-text'>Brands</span>}
-        </Link>
-
-        {/* Inventory */}
-        <Link
-          to="/inventory"
-          className={`nav-item ${isActive('/inventory') ? 'active' : ''}`}
-          onClick={closeMenus}
-        >
-          <span className="nav-icon">
-            <MdShoppingCart size={20} />
-          </span>
-          {!isCollapsed && <span className='nav-text'>Inventory</span>}
-        </Link>
-
-        {/* Orders */}
-        <Link
-          to="/orders/list"
-          className={`nav-item ${location.pathname.startsWith('/orders') ? 'active' : ''}`}
-          onClick={closeMenus}
-        >
-          <span className="nav-icon">
-            <MdReceiptLong size={20} />
-          </span>
-          {!isCollapsed && <span className='nav-text'>Orders</span>}
-        </Link>
-
-        {/* Invoices */}
-        <Link
-          to="/invoices/list"
-          className={`nav-item ${location.pathname.startsWith('/invoices') ? 'active' : ''}`}
-          onClick={closeMenus}
-        >
-          <span className="nav-icon">
-            <MdReceipt size={20} />
-          </span>
-          {!isCollapsed && <span className='nav-text'>Invoices</span>}
-        </Link>
-        {/* Coupons */}
-        <div className="nav-dropdown"
-          onMouseLeave={closeMenus}
-        >
-          <button
-            className={`nav-item sidebar-accordion-btn ${openMenu === 'coupons' ? 'active' : ''}`}
-            onClick={() => setOpenMenu(openMenu === 'coupons' ? null : 'coupons')}
-          >
-            <span className="nav-icon">
-              <MdCardGiftcard size={20} />
-            </span>
-            {!isCollapsed && <span className="nav-text">Coupons</span>}
-          </button>
-
-          {openMenu === 'coupons' && (
-            <div className="nav-submenu">
-              <Link
-                to="/coupons/list"
-                className={`nav-subitem ${isActive('/coupons/list') ? 'active' : ''}`}
-              >
-                All Coupons
-              </Link>
-
-              <Link
-                to="/coupons/create"
-                className={`nav-subitem ${isActive('/coupons/create') ? 'active' : ''}`}
-              >
-                Add Coupon
-              </Link>
-              <Link
-                to="/coupons/analystics"
-                className={`nav-subitem ${isActive('/coupons/analystics') ? 'active' : ''}`}
-              >
-                Coupon Analystics
-              </Link>
-            </div>
-          )}
-        </div>
-
-        {/*Customer*/}
-        <div className="nav-dropdown" onMouseLeave={closeMenus}>
-          <button
-            className={`nav-item sidebar-accordion-btn ${openMenu === 'customer' ? 'active' : ''}`}
-            onClick={() => setOpenMenu(openMenu === 'customer' ? null : 'customer')}
-          >
-            <span className="nav-icon">
-              <MdGroup size={20} />
-            </span>
-            {!isCollapsed && <span className="nav-text">Customer</span>}
-          </button>
-
-          {openMenu === 'customer' && (
-            <div className="nav-submenu">
-              <Link
-                to="/customer/list"
-                className={`nav-subitem ${isActive('/customer/list') ? 'active' : ''}`}
-              >
-                All Customer
-              </Link>
-
-              <Link
-                to="/customer/refferal"
-                className={`nav-subitem ${isActive('/customer/refferal') ? 'active' : ''}`}
-              >
-                Referral Dashboard
-              </Link>
-            </div>
-          )}
-        </div>
-
-        {/* Settings */}
-        <Link
-          to="/settings"
-          className={`nav-item ${isActive('/settings') ? 'active' : ''}`}
-          onClick={closeMenus}
-        >
-          <span className="nav-icon">
-            <MdSettings size={20} />
-          </span>
-          {!isCollapsed && <span className="nav-text">Settings</span>}
-        </Link>
-
-        {/* Notifications */}
-        <Link
-          to="/notifications"
-          className={`nav-item ${isActive('/notifications') ? 'active' : ''}`}
-          onClick={closeMenus}
-        >
-          <span className="nav-icon">
-            <MdNotificationAdd size={20} />
-          </span>
-          {!isCollapsed && <span className="nav-text">Notifications</span>}
-        </Link>
-        <Link
-          to="/profile"
-          className={`nav-item ${isActive('/profile') ? 'active' : ''}`}
-          onClick={closeMenus}
-
-        >
-          <span className="nav-icon">
-            <MdPerson size={20} />
-          </span>
-          {!isCollapsed && <span className="nav-text">Profile</span>}
-        </Link>
-        <Link
-          to="/service-requests"
-          className={`nav-item ${location.pathname.startsWith('/service-requests') ? 'active' : ''}`}
-          onClick={closeMenus}
-
-        >
-          <span className="nav-icon">
-            <MdMiscellaneousServices size={20} />
-          </span>
-          {!isCollapsed && <span className="nav-text">Service Requests</span>}
-        </Link>
-
-        {/* Blogs */}
-        <Link
-          to="/blogs"
-          className={`nav-item ${location.pathname.startsWith('/blogs') ? 'active' : ''}`}
-          onClick={closeMenus}
-        >
-          <span className="nav-icon">
-            <MdArticle size={20} />
-          </span>
-          {!isCollapsed && <span className="nav-text">Blogs</span>}
-        </Link>
-
-        {/* Banners */}
-        <Link
-          to="/banners"
-          className={`nav-item ${location.pathname.startsWith('/banners') ? 'active' : ''}`}
-          onClick={closeMenus}
-        >
-          <span className="nav-icon">
-            <MdViewCarousel size={20} />
-          </span>
-          {!isCollapsed && <span className="nav-text">Banners</span>}
-        </Link>
-
-        {/* Roles */}
-        <Link
-          to="/roles"
-          className={`nav-item ${location.pathname.startsWith('/roles') ? 'active' : ''}`}
-          onClick={closeMenus}
-        >
-          <span className="nav-icon">
-            <MdAdminPanelSettings size={20} />
-          </span>
-          {!isCollapsed && <span className="nav-text">Roles</span>}
-        </Link>
-      </div>
-    </div>
-  )
+      {/* Mobile Backdrop */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 md:hidden z-40"
+          onClick={() => setIsMobileOpen(false)}
+        />
+        
+      )}
+    </>
+  );
 }
-
-export default Sidebar

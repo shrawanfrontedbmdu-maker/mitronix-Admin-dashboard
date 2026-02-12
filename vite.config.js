@@ -1,10 +1,19 @@
 // In your frontend project: vite.config.js
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    tailwindcss(),
+  ],
+  // Serve and build the app under the /admin base path
+  base: '/admin',
   server: {
+    // Open the dev server at /admin instead of the root
+    open: '/admin',
     proxy: {
       // Any request starting with /api will be forwarded
       '/api': {

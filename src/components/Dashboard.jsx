@@ -75,9 +75,9 @@ function Dashboard() {
   return (
     <div>
       <div className="dashboard-header">
-        <div className="welcome-section">
-          <h1>WELCOME!</h1>
-        </div>
+       <div className="welcome-section">
+  <h1 className="text-red-500">WELCOME!</h1>
+</div>
 
         <div className="header-actions">
           <div className="notification-icon">

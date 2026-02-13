@@ -24,7 +24,7 @@ function ProductList() {
         categoryService.getCategories(),
       ]);
 
-      setProducts(productsRes || []);
+      setProducts(productsRes?.products || []);
       setCategories(categoriesRes || []);
     } catch (err) {
       console.error(err);
@@ -40,7 +40,7 @@ function ProductList() {
   };
 
   const handleDelete = async (id, name) => {
-    if (!window.confirm(`Delete "${name}" ?`)) return;
+    if (!window.confirm(`Delete "${name}"?`)) return;
 
     try {
       await productService.deleteProduct(id);
@@ -66,9 +66,7 @@ function ProductList() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Product List</h1>
-          <p className="page-subtitle">
-            Manage your products ({products.length})
-          </p>
+          <p className="page-subtitle">Manage your products ({products.length})</p>
         </div>
 
         <div className="page-actions">
@@ -114,104 +112,93 @@ function ProductList() {
               </thead>
 
               <tbody>
-                {products.map((product) => (
-                  <tr key={product._id}>
-                    {/* PRODUCT */}
-                    <td>
-                      <div className="product-info">
-                        <img
-                          src={
-                            product.images?.[0]?.url ||
-                            "https://via.placeholder.com/50"
-                          }
-                          alt={product.name}
-                          className="product-image"
-                          onError={(e) =>
-                            (e.target.src =
-                              "https://via.placeholder.com/50?text=No+Image")
-                          }
-                        />
-                        <div>
-                          <strong>{product.name}</strong>
-                          <div style={{ fontSize: "12px", color: "#666" }}>
-                            {product.colour}
+                {products.map((product) => {
+                  // Display SKU
+                  const skuDisplay =
+                    product.sku ||
+                    (product.variants?.length > 0 ? product.variants[0].sku + " +" + (product.variants.length - 1) : "N/A");
+
+                  // Display Color (from first variant if exists)
+                  const colorDisplay = product.variants?.[0]?.attributes?.color || "";
+
+                  // Display Price
+                  const priceDisplay = product.sellingPrice || product.variants?.[0]?.price || 0;
+                  const mrpDisplay = product.mrp || product.variants?.[0]?.mrp;
+
+                  // Status
+                  const statusDisplay = product.status === "active";
+
+                  return (
+                    <tr key={product._id}>
+                      {/* PRODUCT */}
+                      <td>
+                        <div className="product-info">
+                          <img
+                            src={product.images?.[0]?.url || "https://via.placeholder.com/50"}
+                            alt={product.name}
+                            className="product-image"
+                            onError={(e) => (e.target.src = "https://via.placeholder.com/50?text=No+Image")}
+                          />
+                          <div>
+                            <strong>{product.name}</strong>
+                            <div style={{ fontSize: "12px", color: "#666" }}>{colorDisplay}</div>
                           </div>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* SKU */}
-                    <td>{product.sku}</td>
+                      {/* SKU */}
+                      <td>{skuDisplay}</td>
 
-                    {/* CATEGORY */}
-                    <td>{getCategoryName(product.category)}</td>
+                      {/* CATEGORY */}
+                      <td>{getCategoryName(product.category)}</td>
 
-                    {/* PRICE */}
-                    <td>
-                      <strong>₹{product.price}</strong>
-                      {product.mrp && (
-                        <div style={{ fontSize: "12px", color: "#888" }}>
-                          MRP: ₹{product.mrp}
+                      {/* PRICE */}
+                      <td>
+                        <strong>₹{priceDisplay}</strong>
+                        {mrpDisplay && (
+                          <div style={{ fontSize: "12px", color: "#888" }}>MRP: ₹{mrpDisplay}</div>
+                        )}
+                      </td>
+
+                      {/* STOCK */}
+                      <td>
+                        <span className={product.stockQuantity > 0 ? "badge green" : "badge red"}>
+                          {product.stockQuantity > 0 ? "In Stock" : "Out of Stock"}
+                        </span>
+                      </td>
+
+                      {/* BRAND */}
+                      <td>{product.brand || "N/A"}</td>
+
+                      {/* STATUS */}
+                      <td>
+                        <span className={statusDisplay ? "badge blue" : "badge gray"}>
+                          {statusDisplay ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+
+                      {/* ACTIONS */}
+                      <td>
+                        <div className="action-buttons">
+                          <Link to={`/products/details/${product._id}`} className="action-btn view">
+                            <MdVisibility />
+                          </Link>
+
+                          <Link to={`/products/edit/${product._id}`} className="action-btn edit">
+                            <MdEdit />
+                          </Link>
+
+                          <button
+                            onClick={() => handleDelete(product._id, product.name)}
+                            className="action-btn delete"
+                          >
+                            <MdDelete />
+                          </button>
                         </div>
-                      )}
-                    </td>
-
-                    {/* STOCK */}
-                    <td>
-                      <span
-                        className={
-                          product.stockQuantity > 0
-                            ? "badge green"
-                            : "badge red"
-                        }
-                      >
-                        {product.stockQuantity > 0 ? "In Stock" : "Out"}
-                      </span>
-                    </td>
-
-                    {/* BRAND */}
-                    <td>{product.brand || "N/A"}</td>
-
-                    {/* STATUS */}
-                    <td>
-                      <span
-                        className={
-                          product.isActive ? "badge blue" : "badge gray"
-                        }
-                      >
-                        {product.isActive ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-
-                    {/* ACTIONS */}
-                    <td>
-                      <div className="action-buttons">
-                        <Link
-                          to={`/products/details/${product._id}`}
-                          className="action-btn view"
-                        >
-                          <MdVisibility />
-                        </Link>
-
-                        <Link
-                          to={`/products/edit/${product._id}`}
-                          className="action-btn edit"
-                        >
-                          <MdEdit />
-                        </Link>
-
-                        <button
-                          onClick={() =>
-                            handleDelete(product._id, product.name)
-                          }
-                          className="action-btn delete"
-                        >
-                          <MdDelete />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

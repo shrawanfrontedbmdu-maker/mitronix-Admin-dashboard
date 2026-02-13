@@ -21,7 +21,7 @@ function CreateProduct() {
     stockStatus: "in-stock",
     description: "",
     specification: "",
-    variants: [{ color: "", size: "", price: "", stock: "", sku: "" }],
+    variants: [{ color: "", size: "", price: "", stockQuantity: 0, sku: "" }],
     brand: "",
     tags: "",
     warranty: "",
@@ -123,7 +123,7 @@ function CreateProduct() {
       ...prev,
       variants: [
         ...prev.variants,
-        { color: "", size: "", price: "", stock: "", sku: "" },
+        { color: "", size: "", price: "", stockQuantity: 0, sku: "" },
       ],
     }));
   };
@@ -142,7 +142,7 @@ function CreateProduct() {
       "image/gif",
       "image/webp",
     ];
-    const maxImages = 5; // 🔥 change here
+    const maxImages = 5;
     const remaining = maxImages - images.length;
     const filesToProcess = Array.from(files).slice(0, remaining);
 
@@ -190,130 +190,123 @@ function CreateProduct() {
   };
 
   // ================= SUBMIT =================
- const handleSubmit = async (e) => {
-  e.preventDefault();
-  setError("");
-  setSuccess("");
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
 
-  try {
-    // Required fields check
-    if (
-      !formData.name ||
-      (!formData.price && formData.variants.length === 0) ||
-      !formData.description ||
-      !formData.category ||
-      !formData.brand ||
-      !formData.warranty ||
-      !formData.returnPolicy ||
-      !formData.hsnCode
-    ) {
-      setError("Please fill all required fields");
-      return;
-    }
+    try {
+      if (
+        !formData.name ||
+        (!formData.price && formData.variants.length === 0) ||
+        !formData.description ||
+        !formData.category ||
+        !formData.brand ||
+        !formData.warranty ||
+        !formData.returnPolicy ||
+        !formData.hsnCode
+      ) {
+        setError("Please fill all required fields");
+        return;
+      }
 
-    // Price validations
-    if (formData.price && parseFloat(formData.price) <= 0) {
-      setError("Selling price must be greater than 0");
-      return;
-    }
+      if (parseFloat(formData.price) > parseFloat(formData.mrp)) {
+        setError("Selling price cannot be higher than MRP");
+        return;
+      }
 
-    if (
-      formData.mrp &&
-      formData.price &&
-      parseFloat(formData.price) > parseFloat(formData.mrp)
-    ) {
-      setError("Selling price cannot be higher than MRP");
-      return;
-    }
+      if (
+        formData.mrp &&
+        formData.price &&
+        parseFloat(formData.price) > parseFloat(formData.mrp)
+      ) {
+        setError("Selling price cannot be higher than MRP");
+        return;
+      }
 
-    if (formData.stockQuantity && parseInt(formData.stockQuantity) < 0) {
-      setError("Stock cannot be negative");
-      return;
-    }
+      if (formData.stockQuantity && parseInt(formData.stockQuantity) < 0) {
+        setError("Stock cannot be negative");
+        return;
+      }
 
-    // HSN code validation
-    if (!/^\d{2}(\d{2})?(\d{2})?$/.test(formData.hsnCode)) {
-      setError("HSN must be 2, 4, or 6 digits");
-      return;
-    }
+      if (!/^\d{2}(\d{2})?(\d{2})?$/.test(formData.hsnCode)) {
+        setError("HSN must be 2, 4, or 6 digits");
+        return;
+      }
 
-    if (images.length === 0) {
-      setError("Upload at least one product image");
-      return;
-    }
+      if (images.length === 0) {
+        setError("Upload at least one product image");
+        return;
+      }
 
-    setLoading(true);
+      setLoading(true);
+      const slug = generateSlug(formData.name);
+      const productKey = formData.productKey || slug + "-" + Date.now();
 
-    const slug = generateSlug(formData.name);
-    const productKey = formData.productKey || slug + "-" + Date.now();
+      const cleanedVariants = formData.variants.filter(
+        (v) => v.color || v.size || v.price || v.stockQuantity,
+      );
+      const mainProductSKU =
+        cleanedVariants.length === 0
+          ? `${productKey}-main-${Date.now()}`
+          : undefined;
 
-    // Filter empty variants
-    const cleanedVariants = formData.variants.filter(
-      (v) => v.color || v.size || v.price || v.stock
-    );
-
-    // Generate SKU for main product if no variants
-    const mainProductSKU =
-      cleanedVariants.length === 0
-        ? `${productKey}-main-${Date.now()}`
-        : undefined;
-
-    const productData = {
-      ...formData,
-      slug,
-      productKey,
-      sku: mainProductSKU, // <-- main product SKU
-      sellingPrice:
-        cleanedVariants.length === 0 && formData.price
-          ? parseFloat(formData.price)
+      const productData = {
+        ...formData,
+        slug,
+        productKey,
+        sku: mainProductSKU,
+        sellingPrice:
+          cleanedVariants.length === 0 && formData.price
+            ? parseFloat(formData.price)
+            : undefined,
+        mrp:
+          cleanedVariants.length === 0 && formData.mrp
+            ? parseFloat(formData.mrp)
+            : undefined,
+        discountPrice: formData.discountPrice
+          ? parseFloat(formData.discountPrice)
           : undefined,
-      mrp:
-        cleanedVariants.length === 0 && formData.mrp
-          ? parseFloat(formData.mrp)
+        variants: cleanedVariants.map((v) => ({
+          color: v.color,
+          size: v.size,
+          price: v.price ? parseFloat(v.price) : 0,
+          stockQuantity: v.stockQuantity ? parseInt(v.stockQuantity) : 0,
+          sku:
+            v.sku ||
+            `${productKey}-${v.color || "NA"}-${v.size || "NA"}-${Date.now()}`,
+        })),
+        tags: formData.tags
+          ? formData.tags.split(",").map((t) => t.trim())
+          : [],
+        images: images.map((img) => img.file),
+        weight: formData.weight || "",
+        dimensions: formData.dimensions || "",
+        resolution: formData.resolution || "",
+        screenSize: formData.screenSize
+          ? parseFloat(formData.screenSize)
           : undefined,
-      discountPrice: formData.discountPrice
-        ? parseFloat(formData.discountPrice)
-        : undefined,
-      variants: cleanedVariants.map((v) => ({
-        color: v.color,
-        size: v.size,
-        price: v.price ? parseFloat(v.price) : 0,
-        stock: v.stock ? parseInt(v.stock) : 0,
-        sku:
-          v.sku ||
-          `${productKey}-${v.color || "NA"}-${v.size || "NA"}-${Date.now()}`,
-      })),
-      tags: formData.tags
-        ? formData.tags.split(",").map((t) => t.trim())
-        : [],
-      images: images.map((img) => img.file),
-      weight: formData.weight || "",
-      dimensions: formData.dimensions || "",
-      resolution: formData.resolution || "",
-      screenSize: formData.screenSize ? parseFloat(formData.screenSize) : undefined,
-      supplier: [formData.supplier],
-      shipping: [formData.shipping],
-      status: formData.isActive ? "active" : "inactive",
-      isRecommended: !!formData.isRecommended,
-    };
+        supplier: [formData.supplier],
+        shipping: [formData.shipping],
+        status: formData.isActive ? "active" : "inactive",
+        isRecommended: !!formData.isRecommended,
+      };
 
-    console.log("Submitting product data:", productData);
-
-    const result = await productService.createProduct(productData);
-    setSuccess("Product created successfully!");
-    console.log("Backend response:", result);
-
-    images.forEach((img) => URL.revokeObjectURL(img.preview));
-    resetForm();
-    setTimeout(() => navigate("/products/grid"), 1500);
-  } catch (err) {
-    console.error("Submit error:", err);
-    setError(err.response?.message || err.message || "Failed to create product");
-  } finally {
-    setLoading(false);
-  }
-};
-
+      console.log("Submitting product data:", productData);
+      const result = await productService.createProduct(productData);
+      setSuccess("Product created successfully!");
+      images.forEach((img) => URL.revokeObjectURL(img.preview));
+      resetForm();
+      setTimeout(() => navigate("/products/grid"), 1500);
+    } catch (err) {
+      console.error("Submit error:", err);
+      setError(
+        err.response?.message || err.message || "Failed to create product",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div>
@@ -540,7 +533,7 @@ function CreateProduct() {
                   </small>
                 </div>
 
-                {/* <div className="form-group">
+                <div className="form-group">
                   <label htmlFor="sku">SKU / Product Code *</label>
                   <input
                     type="text"
@@ -554,7 +547,7 @@ function CreateProduct() {
                   <small className="form-hint">
                     Unique identifier for this product
                   </small>
-                </div> */}
+                </div>
 
                 <div className="form-group">
                   <label htmlFor="brand">Brand / Manufacturer</label>
@@ -687,11 +680,11 @@ function CreateProduct() {
                           <label>Variant Stock</label>
                           <input
                             type="number"
-                            value={variant.stock}
+                            value={variant.stockQuantity}
                             onChange={(e) =>
                               handleVariantChange(
                                 index,
-                                "stock",
+                                "stockQuantity",
                                 e.target.value,
                               )
                             }
@@ -1120,7 +1113,7 @@ function CreateProduct() {
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={loading}
+              disabled={loading || !categories || categories.length === 0}
             >
               <MdSave size={16} />
               {loading ? "Creating..." : "Create Product"}

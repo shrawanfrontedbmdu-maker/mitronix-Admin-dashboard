@@ -15,7 +15,7 @@ export default function Store() {
   const fetchStores = async () => {
     try {
       const res = await instance.get(
-        "http://localhost:3000/api/admin/stores",
+        "/admin/stores",
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("adminToken")}`,

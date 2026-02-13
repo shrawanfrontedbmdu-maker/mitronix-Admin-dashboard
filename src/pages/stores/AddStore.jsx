@@ -55,7 +55,7 @@ export default function AddStore() {
       };
 
       const res = await instance.post(
-        "http://localhost:3000/api/admin/stores",
+        "/admin/stores",
         payload,
         {
           headers: {

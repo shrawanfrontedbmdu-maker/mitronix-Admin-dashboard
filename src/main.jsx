@@ -4,10 +4,14 @@ import { BrowserRouter } from "react-router-dom";
 import './index.css'
 import App from "./App";
 
+// Use Vite's BASE_URL at build time so the router basename matches the deployed path.
+const rawBase = import.meta.env.BASE_URL || '/';
+const basename = rawBase === '/' ? '/' : rawBase.replace(/\/$/, '');
+
 createRoot(document.getElementById("root")).render(
-<BrowserRouter basename="/admin">
-  <StrictMode>
-    <App />
-  </StrictMode>
-</BrowserRouter>
+  <BrowserRouter basename={basename}>
+    <StrictMode>
+      <App />
+    </StrictMode>
+  </BrowserRouter>
 );

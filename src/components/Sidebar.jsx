@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import Link from "./Link";
+import { getStoredAuth } from "../utils/auth";
 import { MdLogout } from "react-icons/md";
 import { MdExpandMore, MdExpandLess } from "react-icons/md";
 
@@ -10,11 +11,30 @@ export default function Sidebar({ onLogout }) {
   const [openDropdowns, setOpenDropdowns] = useState({});
   const location = useLocation();
 
-  const isActive = (item) => {
-    if (item.match) {
-      return location.pathname.startsWith(item.match);
+  const { role } = getStoredAuth() || {};
+  const base = role === "storeManager" ? "/store" : "/admin";
+
+  const visibleLinks = Link.filter((item) => {
+    const allowed = item.roles ?? ["admin", "storeManager"]; // default: show to both
+    if (!allowed.includes(role)) return false;
+
+    if (item.children) {
+      const children = item.children.filter((c) => (c.roles ?? allowed).includes(role));
+      return !!item.path || children.length > 0;
     }
-    return location.pathname === item.path;
+
+    return true;
+  });
+
+  const makeFull = (p) => {
+    if (!p) return base;
+    const clean = p.replace(/^\/+/, "");
+    return `${base}/${clean}`;
+  };
+
+  const isActive = (item) => {
+    const fullMatch = item.match ? makeFull(item.match) : makeFull(item.path);
+    return location.pathname.startsWith(fullMatch.replace(/\/$/, ""));
   };
 
   const toggleDropdown = (index) => {
@@ -79,7 +99,7 @@ export default function Sidebar({ onLogout }) {
         {/* MAIN NAVIGATION - SCROLLABLE */}
         
         <div className=" flex-1 overflow-y-auto scrollbar-hide text-white">
-          {Link.map((item, index) => {
+          {visibleLinks.map((item, index) => {
             const Icon = item.icon;
             const isDropdown = item.children && item.children.length > 0;
             const isOpen = openDropdowns[index];
@@ -126,7 +146,7 @@ export default function Sidebar({ onLogout }) {
                       {item.children.map((child, childIndex) => (
                         <NavLink
                           key={childIndex}
-                          to={child.path}
+                          to={makeFull(child.path)}
                           className={({ isActive: linkIsActive }) =>
                             `nav-subitem px-4 py-2 text-xs flex items-center gap-2 transition text-gray-300 ${
                               linkIsActive
@@ -149,7 +169,7 @@ export default function Sidebar({ onLogout }) {
             return (
               <NavLink
                 key={index}
-                to={item.path}
+                to={makeFull(item.path)}
                 className={({ isActive: linkIsActive }) =>
                   `nav-item flex items-center gap-3 px-4 py-3 hover:bg-gray-900 transition text-gray-300 justify-start ${
                     linkIsActive

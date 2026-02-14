@@ -10,10 +10,10 @@ export default defineConfig({
     tailwindcss(),
   ],
   // Serve and build the app under the /admin base path
-  base: '/admin',
+  base: '/',
   server: {
     // Open the dev server at /admin instead of the root
-    open: '/admin',
+    open: '/',
     proxy: {
       // Any request starting with /api will be forwarded
       '/api': {

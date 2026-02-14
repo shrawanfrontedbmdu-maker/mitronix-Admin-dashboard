@@ -73,10 +73,10 @@ function ProductList() {
         </div>
 
         <div className="page-actions">
-          <Link to="/products/create" className="btn btn-primary">
+          <Link to="/admin/products/create" className="btn btn-primary">
             <MdAdd /> Add Product
           </Link>
-          <Link to="/products/grid" className="btn btn-secondary">
+          <Link to="admin/products/grid" className="btn btn-secondary">
             <MdViewModule /> Grid View
           </Link>
         </div>

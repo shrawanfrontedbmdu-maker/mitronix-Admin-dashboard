@@ -4,8 +4,6 @@ import { MdCloudUpload, MdClose, MdSave, MdArrowBack } from "react-icons/md";
 import { productService } from "../api/productService.js";
 import { categoryService } from "../api/categoryService.js";
 
-const BACKEND_URL = "https://miltronix-backend-1.onrender.com";
-
 function CreateProduct() {
   const navigate = useNavigate();
 
@@ -13,16 +11,18 @@ function CreateProduct() {
     name: "",
     slug: "",
     category: "",
-    sku: "",
     price: "",
     mrp: "",
-    discountPrice: "",
-    stockQuantity: 0,
-    stockStatus: "in-stock",
+    costPrice: "",
+    currency: "INR",
+    priceHistory: "",
     description: "",
     specification: "",
-    variants: [{ color: "", size: "", price: "", stock: "", sku: "" }],
+    specifications: [{ key: "general", value: "" }],
+    keyFeatures: "",
+    variants: [{ color: "", size: "", price: "", stock: "", sku: "", model: "" }],
     brand: "",
+    modelNumber: "",
     tags: "",
     warranty: "",
     returnPolicy: "",
@@ -36,8 +36,15 @@ function CreateProduct() {
     resolution: "",
     screenSize: "",
     isActive: true,
-    status: "Active",
+    status: "active",
     isRecommended: false,
+    isFeatured: false,
+    isDigital: false,
+    metaTitle: "",
+    metaDescription: "",
+    keywords: "",
+    relatedProducts: "",
+    metadata: {},
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -100,6 +107,7 @@ function CreateProduct() {
         return { ...prev, [parent]: { ...prev[parent], [child]: val } };
       }
 
+      // keep form field types consistent (numbers as strings until submit)
       const newData = { ...prev, [name]: val };
       if (name === "name") newData.slug = generateSlug(val);
       if (name === "price" || name === "mrp") {
@@ -247,10 +255,14 @@ function CreateProduct() {
     const slug = generateSlug(formData.name);
     const productKey = formData.productKey || slug + "-" + Date.now();
 
+    // small helpers used when building payload
+    function formFormNumber(v){ const n = Number(v); return Number.isFinite(n) ? n : undefined; }
+    function formFormDimensions(str){ if (!str) return {}; /* keep as string for now */ return typeof str === 'string' ? str : str; }
+
     // Filter empty variants
-    const cleanedVariants = formData.variants.filter(
-      (v) => v.color || v.size || v.price || v.stock
-    );
+    const cleanedVariants = formData.variants
+      .filter((v) => v.color || v.size || v.price || v.stock || v.sku)
+      .map(v => ({ ...v }));
 
     // Generate SKU for main product if no variants
     const mainProductSKU =
@@ -258,48 +270,61 @@ function CreateProduct() {
         ? `${productKey}-main-${Date.now()}`
         : undefined;
 
+    // prepare payload matching backend `Product` model
     const productData = {
-      ...formData,
+      name: formData.name,
       slug,
       productKey,
-      sku: mainProductSKU, // <-- main product SKU
-      sellingPrice:
-        cleanedVariants.length === 0 && formData.price
-          ? parseFloat(formData.price)
-          : undefined,
-      mrp:
-        cleanedVariants.length === 0 && formData.mrp
-          ? parseFloat(formData.mrp)
-          : undefined,
-      discountPrice: formData.discountPrice
-        ? parseFloat(formData.discountPrice)
-        : undefined,
+      description: formData.description,
+      category: formData.category,
+      mrp: cleanedVariants.length === 0 && formData.mrp ? parseFloat(formData.mrp) : undefined,
+      sellingPrice: cleanedVariants.length === 0 && formData.price ? parseFloat(formData.price) : undefined,
+      costPrice: formFormNumber(formData.costPrice),
+      currency: formData.currency || 'INR',
+      priceHistory: (() => { try { return formData.priceHistory ? JSON.parse(formData.priceHistory) : []; } catch { return []; } })(),
+      sku: mainProductSKU,
+      brand: formData.brand || undefined,
+      modelNumber: formData.modelNumber || undefined,
       variants: cleanedVariants.map((v) => ({
-        color: v.color,
-        size: v.size,
-        price: v.price ? parseFloat(v.price) : 0,
-        stock: v.stock ? parseInt(v.stock) : 0,
-        sku:
-          v.sku ||
-          `${productKey}-${v.color || "NA"}-${v.size || "NA"}-${Date.now()}`,
+        sku: v.sku || `${productKey}-${v.color || "NA"}-${v.size || "NA"}-${Date.now()}`,
+        price: formFormNumber(v.price) || 0,
+        stockQuantity: v.stock ? parseInt(v.stock) : 0,
+        attributes: { color: v.color || "", size: v.size || "", model: v.model || formData.modelNumber || "" },
       })),
-      tags: formData.tags
-        ? formData.tags.split(",").map((t) => t.trim())
-        : [],
+      stockQuantity: cleanedVariants.length > 0 ? cleanedVariants.reduce((s, v) => s + (parseInt(v.stock || 0)), 0) : (formData.stockQuantity || 0),
+      specifications: formData.specifications && formData.specifications.length ? formData.specifications : (formData.specification ? [{ key: 'general', value: formData.specification }] : []),
+      keyFeatures: formData.keyFeatures ? formData.keyFeatures.split(',').map(k=>k.trim()) : [],
+      dimensions: formFormDimensions(formData.dimensions),
+      warranty: formData.warranty,
+      returnPolicy: formData.returnPolicy,
+      hsnCode: formData.hsnCode,
+      barcode: formData.barcode || undefined,
       images: images.map((img) => img.file),
-      weight: formData.weight || "",
-      dimensions: formData.dimensions || "",
-      resolution: formData.resolution || "",
-      screenSize: formData.screenSize ? parseFloat(formData.screenSize) : undefined,
-      supplier: [formData.supplier],
-      shipping: [formData.shipping],
-      status: formData.isActive ? "active" : "inactive",
+      supplier: formData.supplier && (formData.supplier.name || formData.supplier.email) ? [formData.supplier] : [],
+      shipping: formData.shipping && (formData.shipping.charges || formData.shipping.deliveryTime) ? [formData.shipping] : [],
+      tags: formData.tags ? formData.tags.split(',').map(t => t.trim()) : [],
       isRecommended: !!formData.isRecommended,
+      isFeatured: !!formData.isFeatured,
+      isDigital: !!formData.isDigital,
+      relatedProducts: formData.relatedProducts ? formData.relatedProducts.split(',').map(r => r.trim()) : [],
+      metadata: formData.metadata || {},
+      metaTitle: formData.metaTitle || undefined,
+      metaDescription: formData.metaDescription || undefined,
+      keywords: formData.keywords ? formData.keywords.split(',').map(k=>k.trim()) : [],
+      status: formData.isActive ? 'active' : 'inactive'
     };
 
     console.log("Submitting product data:", productData);
 
-    const result = await productService.createProduct(productData);
+    // create FormData for images + JSON payload (backend expects files or image URLs)
+    const form = new FormData();
+    const payload = { ...productData };
+    // images as files
+    for (const f of payload.images || []) form.append('images', f);
+    delete payload.images;
+    form.append('data', JSON.stringify(payload));
+
+    const result = await productService.createProduct(form);
     setSuccess("Product created successfully!");
     console.log("Backend response:", result);
 
@@ -314,6 +339,8 @@ function CreateProduct() {
   }
 };
 
+// make image previews available for the UI (was missing and caused the exception)
+const imagePreviews = images.map((img) => img.preview);
 
   return (
     <div>

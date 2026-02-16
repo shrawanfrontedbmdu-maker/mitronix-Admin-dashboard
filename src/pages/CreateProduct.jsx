@@ -4,47 +4,50 @@ import { MdCloudUpload, MdClose, MdSave, MdArrowBack } from "react-icons/md";
 import { productService } from "../api/productService.js";
 import { categoryService } from "../api/categoryService.js";
 
+const BACKEND_URL = "https://miltronix-backend-1.onrender.com";
+
 function CreateProduct() {
   const navigate = useNavigate();
 
   const initialFormState = {
     name: "",
     slug: "",
-    category: "",
-    price: "",
-    mrp: "",
-    costPrice: "",
-    currency: "INR",
-    priceHistory: "",
+    productKey: "",
     description: "",
-    specification: "",
-    specifications: [{ key: "general", value: "" }],
-    keyFeatures: "",
-    variants: [{ color: "", size: "", price: "", stock: "", sku: "", model: "" }],
+    category: "",
     brand: "",
     modelNumber: "",
-    tags: "",
+    mrp: "",
+    sellingPrice: "",
+    costPrice: "",
+    currency: "INR",
+    sku: "",
+    stockQuantity: 0,
+    stockStatus: "in-stock",
+    lowStockThreshold: 5,
+    allowBackorder: false,
+    reservedQuantity: 0,
+    specifications: [],
+    keyFeatures: [],
+    variants: [],
+    dimensions: {
+      weight: "",
+      length: "",
+      width: "",
+      height: "",
+      unit: "cm",
+    },
     warranty: "",
     returnPolicy: "",
-    barcode: "",
-    hsnCode: "",
-    productKey: "",
-    supplier: { name: "", contact: "", email: "" },
-    shipping: { charges: "", deliveryTime: "", restrictions: "" },
-    weight: "",
-    dimensions: "",
-    resolution: "",
-    screenSize: "",
-    isActive: true,
-    status: "active",
     isRecommended: false,
     isFeatured: false,
     isDigital: false,
+    status: "active",
     metaTitle: "",
     metaDescription: "",
-    keywords: "",
-    relatedProducts: "",
-    metadata: {},
+    keywords: [],
+    tags: [],
+    relatedProducts: [],
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -89,8 +92,8 @@ function CreateProduct() {
       .replace(/^-+|-+$/g, "");
   };
 
-  const validatePricing = (price, mrp) => {
-    if (price && mrp && parseFloat(price) > parseFloat(mrp)) {
+  const validatePricing = (sellingPrice, mrp) => {
+    if (sellingPrice && mrp && parseFloat(sellingPrice) > parseFloat(mrp)) {
       setPriceValidationMessage("⚠️ Selling price cannot be higher than MRP");
     } else {
       setPriceValidationMessage("");
@@ -107,11 +110,11 @@ function CreateProduct() {
         return { ...prev, [parent]: { ...prev[parent], [child]: val } };
       }
 
-      // keep form field types consistent (numbers as strings until submit)
       const newData = { ...prev, [name]: val };
       if (name === "name") newData.slug = generateSlug(val);
-      if (name === "price" || name === "mrp") {
-        const currentPrice = name === "price" ? val : newData.price;
+      if (name === "sellingPrice" || name === "mrp") {
+        const currentPrice =
+          name === "sellingPrice" ? val : newData.sellingPrice;
         const currentMrp = name === "mrp" ? val : newData.mrp;
         validatePricing(currentPrice, currentMrp);
       }
@@ -119,10 +122,50 @@ function CreateProduct() {
     });
   };
 
-  // ================= VARIANT FUNCTIONS =================
+  const handleSpecificationChange = (index, field, value) => {
+    const updated = [...formData.specifications];
+    updated[index][field] = value;
+    setFormData((prev) => ({ ...prev, specifications: updated }));
+  };
+
+  const addSpecification = () => {
+    setFormData((prev) => ({
+      ...prev,
+      specifications: [...prev.specifications, { key: "", value: "" }],
+    }));
+  };
+
+  const removeSpecification = (index) => {
+    const updated = formData.specifications.filter((_, i) => i !== index);
+    setFormData((prev) => ({ ...prev, specifications: updated }));
+  };
+
+  const handleKeyFeatureChange = (index, field, value) => {
+    const updated = [...formData.keyFeatures];
+    updated[index][field] = value;
+    setFormData((prev) => ({ ...prev, keyFeatures: updated }));
+  };
+
+  const addKeyFeature = () => {
+    setFormData((prev) => ({
+      ...prev,
+      keyFeatures: [...prev.keyFeatures, { key: "", value: "" }],
+    }));
+  };
+
+  const removeKeyFeature = (index) => {
+    const updated = formData.keyFeatures.filter((_, i) => i !== index);
+    setFormData((prev) => ({ ...prev, keyFeatures: updated }));
+  };
+
   const handleVariantChange = (index, field, value) => {
     const updatedVariants = [...formData.variants];
-    updatedVariants[index][field] = value;
+    if (field.includes(".")) {
+      const [parent, child] = field.split(".");
+      updatedVariants[index][parent][child] = value;
+    } else {
+      updatedVariants[index][field] = value;
+    }
     setFormData((prev) => ({ ...prev, variants: updatedVariants }));
   };
 
@@ -131,7 +174,15 @@ function CreateProduct() {
       ...prev,
       variants: [
         ...prev.variants,
-        { color: "", size: "", price: "", stock: "", sku: "" },
+        {
+          sku: "",
+          price: 0,
+          stockQuantity: 0,
+          attributes: { color: "", size: "", model: "" },
+          images: [],
+          specifications: [],
+          isActive: true,
+        },
       ],
     }));
   };
@@ -141,7 +192,6 @@ function CreateProduct() {
     setFormData((prev) => ({ ...prev, variants: updated }));
   };
 
-  // ================= IMAGE FUNCTIONS =================
   const handleImageUpload = (files) => {
     const validTypes = [
       "image/jpeg",
@@ -150,7 +200,7 @@ function CreateProduct() {
       "image/gif",
       "image/webp",
     ];
-    const maxImages = 5; // 🔥 change here
+    const maxImages = 5;
     const remaining = maxImages - images.length;
     const filesToProcess = Array.from(files).slice(0, remaining);
 
@@ -197,176 +247,231 @@ function CreateProduct() {
     });
   };
 
-  // ================= SUBMIT =================
- const handleSubmit = async (e) => {
-  e.preventDefault();
-  setError("");
-  setSuccess("");
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
 
-  try {
-    // Required fields check
-    if (
-      !formData.name ||
-      (!formData.price && formData.variants.length === 0) ||
-      !formData.description ||
-      !formData.category ||
-      !formData.brand ||
-      !formData.warranty ||
-      !formData.returnPolicy ||
-      !formData.hsnCode
-    ) {
-      setError("Please fill all required fields");
-      return;
+    try {
+      if (
+        !formData.name ||
+        !formData.productKey ||
+        !formData.description ||
+        !formData.category ||
+        !formData.warranty ||
+        !formData.returnPolicy
+      ) {
+        setError("Please fill all required fields");
+        return;
+      }
+
+      if (
+        formData.mrp &&
+        formData.sellingPrice &&
+        parseFloat(formData.sellingPrice) > parseFloat(formData.mrp)
+      ) {
+        setError("Selling price cannot be higher than MRP");
+        return;
+      }
+
+      if (images.length === 0) {
+        setError("Upload at least one product image");
+        return;
+      }
+
+      setLoading(true);
+      const slug = generateSlug(formData.name);
+      const productKey = formData.productKey || slug + "-" + Date.now();
+
+      const cleanedVariants = formData.variants.filter(
+        (v) =>
+          v.sku ||
+          v.attributes.color ||
+          v.attributes.size ||
+          v.price ||
+          v.stockQuantity,
+      );
+
+      const mainProductSKU =
+        cleanedVariants.length === 0
+          ? formData.sku || `${productKey}-main-${Date.now()}`
+          : undefined;
+
+      const productData = {
+        name: formData.name,
+        slug,
+        productKey,
+        description: formData.description,
+        category: formData.category,
+        brand: formData.brand || undefined,
+        modelNumber: formData.modelNumber || undefined,
+        mrp:
+          cleanedVariants.length === 0 && formData.mrp
+            ? parseFloat(formData.mrp)
+            : undefined,
+        sellingPrice:
+          cleanedVariants.length === 0 && formData.sellingPrice
+            ? parseFloat(formData.sellingPrice)
+            : undefined,
+        costPrice: formData.costPrice
+          ? parseFloat(formData.costPrice)
+          : undefined,
+        currency: formData.currency,
+        sku: mainProductSKU,
+        stockQuantity: formData.stockQuantity
+          ? parseInt(formData.stockQuantity)
+          : 0,
+        stockStatus: formData.stockStatus,
+        lowStockThreshold: formData.lowStockThreshold
+          ? parseInt(formData.lowStockThreshold)
+          : 5,
+        allowBackorder: formData.allowBackorder,
+        reservedQuantity: formData.reservedQuantity
+          ? parseInt(formData.reservedQuantity)
+          : 0,
+        specifications: formData.specifications.filter((s) => s.key || s.value),
+        keyFeatures: formData.keyFeatures.filter((kf) => kf.key || kf.value),
+        variants: cleanedVariants.map((v) => ({
+          sku:
+            v.sku ||
+            `${productKey}-${v.attributes.color || "NA"}-${v.attributes.size || "NA"}-${Date.now()}`,
+          price: v.price ? parseFloat(v.price) : 0,
+          stockQuantity: v.stockQuantity ? parseInt(v.stockQuantity) : 0,
+          attributes: {
+            color: v.attributes.color || undefined,
+            size: v.attributes.size || undefined,
+            model: v.attributes.model || undefined,
+          },
+          images: v.images || [],
+          specifications: v.specifications || [],
+          isActive: v.isActive !== undefined ? v.isActive : true,
+        })),
+        dimensions: {
+          weight: formData.dimensions.weight
+            ? parseFloat(formData.dimensions.weight)
+            : undefined,
+          length: formData.dimensions.length
+            ? parseFloat(formData.dimensions.length)
+            : undefined,
+          width: formData.dimensions.width
+            ? parseFloat(formData.dimensions.width)
+            : undefined,
+          height: formData.dimensions.height
+            ? parseFloat(formData.dimensions.height)
+            : undefined,
+          unit: formData.dimensions.unit || "cm",
+        },
+        warranty: formData.warranty,
+        returnPolicy: formData.returnPolicy,
+        isRecommended: !!formData.isRecommended,
+        isFeatured: !!formData.isFeatured,
+        isDigital: !!formData.isDigital,
+        status: formData.status,
+        metaTitle: formData.metaTitle || undefined,
+        metaDescription: formData.metaDescription || undefined,
+        keywords: formData.keywords.length > 0 ? formData.keywords : undefined,
+        tags: formData.tags.length > 0 ? formData.tags : undefined,
+        relatedProducts:
+          formData.relatedProducts.length > 0
+            ? formData.relatedProducts
+            : undefined,
+        images: images.map((img) => img.file),
+      };
+
+      console.log("Submitting product data:", productData);
+      const result = await productService.createProduct(productData);
+      setSuccess("Product created successfully!");
+      images.forEach((img) => URL.revokeObjectURL(img.preview));
+      resetForm();
+      setTimeout(() => navigate("/admin/products/grid"), 1500);
+    } catch (err) {
+      console.error("Submit error:", err);
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to create product",
+      );
+    } finally {
+      setLoading(false);
     }
-
-    // Price validations
-    if (formData.price && parseFloat(formData.price) <= 0) {
-      setError("Selling price must be greater than 0");
-      return;
-    }
-
-    if (
-      formData.mrp &&
-      formData.price &&
-      parseFloat(formData.price) > parseFloat(formData.mrp)
-    ) {
-      setError("Selling price cannot be higher than MRP");
-      return;
-    }
-
-    if (formData.stockQuantity && parseInt(formData.stockQuantity) < 0) {
-      setError("Stock cannot be negative");
-      return;
-    }
-
-    // HSN code validation
-    if (!/^\d{2}(\d{2})?(\d{2})?$/.test(formData.hsnCode)) {
-      setError("HSN must be 2, 4, or 6 digits");
-      return;
-    }
-
-    if (images.length === 0) {
-      setError("Upload at least one product image");
-      return;
-    }
-
-    setLoading(true);
-
-    const slug = generateSlug(formData.name);
-    const productKey = formData.productKey || slug + "-" + Date.now();
-
-    // small helpers used when building payload
-    function formFormNumber(v){ const n = Number(v); return Number.isFinite(n) ? n : undefined; }
-    function formFormDimensions(str){ if (!str) return {}; /* keep as string for now */ return typeof str === 'string' ? str : str; }
-
-    // Filter empty variants
-    const cleanedVariants = formData.variants
-      .filter((v) => v.color || v.size || v.price || v.stock || v.sku)
-      .map(v => ({ ...v }));
-
-    // Generate SKU for main product if no variants
-    const mainProductSKU =
-      cleanedVariants.length === 0
-        ? `${productKey}-main-${Date.now()}`
-        : undefined;
-
-    // prepare payload matching backend `Product` model
-    const productData = {
-      name: formData.name,
-      slug,
-      productKey,
-      description: formData.description,
-      category: formData.category,
-      mrp: cleanedVariants.length === 0 && formData.mrp ? parseFloat(formData.mrp) : undefined,
-      sellingPrice: cleanedVariants.length === 0 && formData.price ? parseFloat(formData.price) : undefined,
-      costPrice: formFormNumber(formData.costPrice),
-      currency: formData.currency || 'INR',
-      priceHistory: (() => { try { return formData.priceHistory ? JSON.parse(formData.priceHistory) : []; } catch { return []; } })(),
-      sku: mainProductSKU,
-      brand: formData.brand || undefined,
-      modelNumber: formData.modelNumber || undefined,
-      variants: cleanedVariants.map((v) => ({
-        sku: v.sku || `${productKey}-${v.color || "NA"}-${v.size || "NA"}-${Date.now()}`,
-        price: formFormNumber(v.price) || 0,
-        stockQuantity: v.stock ? parseInt(v.stock) : 0,
-        attributes: { color: v.color || "", size: v.size || "", model: v.model || formData.modelNumber || "" },
-      })),
-      stockQuantity: cleanedVariants.length > 0 ? cleanedVariants.reduce((s, v) => s + (parseInt(v.stock || 0)), 0) : (formData.stockQuantity || 0),
-      specifications: formData.specifications && formData.specifications.length ? formData.specifications : (formData.specification ? [{ key: 'general', value: formData.specification }] : []),
-      keyFeatures: formData.keyFeatures ? formData.keyFeatures.split(',').map(k=>k.trim()) : [],
-      dimensions: formFormDimensions(formData.dimensions),
-      warranty: formData.warranty,
-      returnPolicy: formData.returnPolicy,
-      hsnCode: formData.hsnCode,
-      barcode: formData.barcode || undefined,
-      images: images.map((img) => img.file),
-      supplier: formData.supplier && (formData.supplier.name || formData.supplier.email) ? [formData.supplier] : [],
-      shipping: formData.shipping && (formData.shipping.charges || formData.shipping.deliveryTime) ? [formData.shipping] : [],
-      tags: formData.tags ? formData.tags.split(',').map(t => t.trim()) : [],
-      isRecommended: !!formData.isRecommended,
-      isFeatured: !!formData.isFeatured,
-      isDigital: !!formData.isDigital,
-      relatedProducts: formData.relatedProducts ? formData.relatedProducts.split(',').map(r => r.trim()) : [],
-      metadata: formData.metadata || {},
-      metaTitle: formData.metaTitle || undefined,
-      metaDescription: formData.metaDescription || undefined,
-      keywords: formData.keywords ? formData.keywords.split(',').map(k=>k.trim()) : [],
-      status: formData.isActive ? 'active' : 'inactive'
-    };
-
-    console.log("Submitting product data:", productData);
-
-    // create FormData for images + JSON payload (backend expects files or image URLs)
-    const form = new FormData();
-    const payload = { ...productData };
-    // images as files
-    for (const f of payload.images || []) form.append('images', f);
-    delete payload.images;
-    form.append('data', JSON.stringify(payload));
-
-    const result = await productService.createProduct(form);
-    setSuccess("Product created successfully!");
-    console.log("Backend response:", result);
-
-    images.forEach((img) => URL.revokeObjectURL(img.preview));
-    resetForm();
-    setTimeout(() => navigate("/products/grid"), 1500);
-  } catch (err) {
-    console.error("Submit error:", err);
-    setError(err.response?.message || err.message || "Failed to create product");
-  } finally {
-    setLoading(false);
-  }
-};
-
-// make image previews available for the UI (was missing and caused the exception)
-const imagePreviews = images.map((img) => img.preview);
+  };
 
   return (
-    <div>
-      <div className="page-header">
-        <div className="page-title-section">
-          <h1 className="page-title">Create Product</h1>
-          <p className="page-subtitle">Add a new product to your inventory</p>
-        </div>
-        <div className="page-actions">
-          <Link to="/products/list" className="btn btn-secondary">
+    <div
+      style={{
+        padding: "24px",
+        backgroundColor: "#f9fafb",
+        minHeight: "100vh",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "1400px",
+          margin: "0 auto",
+          backgroundColor: "white",
+          borderRadius: "12px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          overflow: "hidden",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            padding: "24px 32px",
+            borderBottom: "1px solid #e5e7eb",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            backgroundColor: "#fff",
+          }}
+        >
+          <div>
+            <h1
+              style={{
+                fontSize: "24px",
+                fontWeight: "600",
+                margin: "0 0 4px 0",
+                color: "#111827",
+              }}
+            >
+              Create Product
+            </h1>
+            <p style={{ fontSize: "14px", color: "#6b7280", margin: 0 }}>
+              Add a new product to your inventory
+            </p>
+          </div>
+          <Link
+            to="/admin/products/list"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "10px 16px",
+              backgroundColor: "#f3f4f6",
+              color: "#374151",
+              borderRadius: "8px",
+              textDecoration: "none",
+              fontSize: "14px",
+              fontWeight: "500",
+              border: "1px solid #e5e7eb",
+            }}
+          >
             <MdArrowBack size={16} />
             Back to List
           </Link>
         </div>
-      </div>
-      <div className="form-container">
+
+        {/* Alerts */}
         {error && (
           <div
-            className="error-message"
             style={{
-              backgroundColor: "#fee2e2",
+              margin: "24px 32px 0",
+              backgroundColor: "#fef2f2",
               border: "1px solid #fecaca",
               color: "#dc2626",
-              padding: "12px",
+              padding: "12px 16px",
               borderRadius: "8px",
-              marginBottom: "20px",
+              fontSize: "14px",
             }}
           >
             {error}
@@ -375,32 +480,33 @@ const imagePreviews = images.map((img) => img.preview);
 
         {success && (
           <div
-            className="success-message"
             style={{
-              backgroundColor: "#dcfce7",
+              margin: "24px 32px 0",
+              backgroundColor: "#f0fdf4",
               border: "1px solid #bbf7d0",
               color: "#166534",
-              padding: "12px",
+              padding: "12px 16px",
               borderRadius: "8px",
-              marginBottom: "20px",
+              fontSize: "14px",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
             }}
           >
             <span>{success}</span>
-            <div style={{ display: "flex", gap: "10px" }}>
+            <div style={{ display: "flex", gap: "8px" }}>
               <button
                 type="button"
-                onClick={() => navigate("/products/list")}
+                onClick={() => navigate("/admin/products/list")}
                 style={{
                   padding: "6px 12px",
                   backgroundColor: "#166534",
                   color: "white",
                   border: "none",
-                  borderRadius: "4px",
+                  borderRadius: "6px",
                   cursor: "pointer",
-                  fontSize: "14px",
+                  fontSize: "13px",
+                  fontWeight: "500",
                 }}
               >
                 View Products
@@ -413,9 +519,10 @@ const imagePreviews = images.map((img) => img.preview);
                   backgroundColor: "#16a34a",
                   color: "white",
                   border: "none",
-                  borderRadius: "4px",
+                  borderRadius: "6px",
                   cursor: "pointer",
-                  fontSize: "14px",
+                  fontSize: "13px",
+                  fontWeight: "500",
                 }}
               >
                 Create Another
@@ -424,740 +531,1638 @@ const imagePreviews = images.map((img) => img.preview);
           </div>
         )}
 
-        <form
-          onSubmit={handleSubmit}
-          className="product-form"
-          style={{ position: "relative" }}
-        >
+        <form onSubmit={handleSubmit} style={{ position: "relative" }}>
           {loading && (
             <div
               style={{
-                position: "absolute",
+                position: "fixed",
                 top: 0,
                 left: 0,
                 right: 0,
                 bottom: 0,
-                backgroundColor: "rgba(255, 255, 255, 0.8)",
+                backgroundColor: "rgba(0, 0, 0, 0.3)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                zIndex: 1000,
-                borderRadius: "8px",
+                zIndex: 9999,
               }}
             >
               <div
                 style={{
-                  padding: "20px",
+                  padding: "32px",
                   backgroundColor: "white",
-                  borderRadius: "8px",
-                  boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+                  borderRadius: "12px",
+                  boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
                   textAlign: "center",
                 }}
               >
                 <div
                   style={{
-                    width: "24px",
-                    height: "24px",
-                    border: "3px solid #f3f3f3",
-                    borderTop: "3px solid #3b82f6",
+                    width: "40px",
+                    height: "40px",
+                    border: "4px solid #f3f4f6",
+                    borderTop: "4px solid #3b82f6",
                     borderRadius: "50%",
                     animation: "spin 1s linear infinite",
-                    margin: "0 auto 10px",
+                    margin: "0 auto 16px",
                   }}
                 ></div>
-                <div>Creating product...</div>
+                <div
+                  style={{
+                    fontSize: "16px",
+                    fontWeight: "500",
+                    color: "#111827",
+                  }}
+                >
+                  Creating product...
+                </div>
               </div>
             </div>
           )}
-          <div className="form-grid">
-            <div className="form-section">
-              <div className="content-card">
-                <h3>Product Images</h3>
-                <div className="image-upload-section">
-                  <div
-                    className={`image-upload-area ${dragOver ? "dragover" : ""}`}
-                    onClick={() =>
-                      document.getElementById("file-input").click()
-                    }
-                    onDrop={handleDrop}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                  >
-                    <div className="upload-icon">
-                      <MdCloudUpload />
-                    </div>
-                    <div className="upload-text">
-                      Drop your images here, or click to browse
-                    </div>
-                    <div className="upload-hint">
-                      PNG, JPG, GIF and WebP files are allowed (Max 5 images,
-                      5MB each)
-                      {images.length > 0 && (
-                        <div style={{ marginTop: "4px", fontWeight: "bold" }}>
-                          {images.length}/5 images selected
-                        </div>
-                      )}
-                    </div>
-                  </div>
 
-                  <input
-                    id="file-input"
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleFileSelect}
-                    className="hidden-file-input"
-                  />
+          <div style={{ padding: "32px" }}>
+            {/* Product Media */}
+            <div style={{ marginBottom: "32px" }}>
+              <h3
+                style={{
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  marginBottom: "16px",
+                  color: "#111827",
+                }}
+              >
+                Product Media (Images & Video)
+              </h3>
 
-                  {images.length > 0 && (
-                    <div className="image-preview-grid">
-                      {images.map((image) => (
-                        <div key={image.id} className="image-preview-item">
-                          <img
-                            src={image.preview}
-                            alt="Product preview"
-                            className="image-preview"
-                          />
-                          <button
-                            type="button"
-                            className="image-remove-btn"
-                            onClick={() => removeImage(image.id)}
-                          >
-                            <MdClose />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+              <div
+                onClick={() => document.getElementById("file-input").click()}
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                style={{
+                  border: dragOver
+                    ? "2px dashed #3b82f6"
+                    : "2px dashed #d1d5db",
+                  borderRadius: "12px",
+                  padding: "48px",
+                  textAlign: "center",
+                  cursor: "pointer",
+                  backgroundColor: dragOver ? "#eff6ff" : "#fafafa",
+                  transition: "all 0.2s",
+                }}
+              >
+                <MdCloudUpload
+                  size={48}
+                  style={{ color: "#9ca3af", marginBottom: "16px" }}
+                />
+                <div
+                  style={{
+                    fontSize: "14px",
+                    color: "#374151",
+                    marginBottom: "8px",
+                    fontWeight: "500",
+                  }}
+                >
+                  Drag & drop images and video files here, or click to browse
+                </div>
+                <div style={{ fontSize: "13px", color: "#6b7280" }}>
+                  {images.length > 0
+                    ? `${images.length}/5 images selected`
+                    : "PNG, JPG, GIF and WebP (Max 5 images, 5MB each)"}
                 </div>
               </div>
 
-              <div className="content-card">
-                <h3>Basic Information</h3>
+              <input
+                id="file-input"
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={handleFileSelect}
+                style={{ display: "none" }}
+              />
 
-                <div className="form-group">
-                  <label htmlFor="name">Product Name *</label>
-                  <input
-                    type="text"
-                    id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="Enter product name"
-                    disabled={loading}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="slug">URL Slug *</label>
-                  <input
-                    type="text"
-                    id="slug"
-                    name="slug"
-                    value={formData.slug}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="product-url-slug"
-                    disabled={loading}
-                  />
-                  <small className="form-hint">
-                    URL-friendly version of the product name. Automatically
-                    generated from product name.
-                  </small>
-                </div>
-
-                {/* <div className="form-group">
-                  <label htmlFor="sku">SKU / Product Code *</label>
-                  <input
-                    type="text"
-                    id="sku"
-                    name="sku"
-                    value={formData.sku}
-                    onChange={handleInputChange}
-                    placeholder="Enter unique product SKU"
-                    required
-                  />
-                  <small className="form-hint">
-                    Unique identifier for this product
-                  </small>
-                </div> */}
-
-                <div className="form-group">
-                  <label htmlFor="brand">Brand / Manufacturer</label>
-                  <input
-                    type="text"
-                    id="brand"
-                    name="brand"
-                    value={formData.brand}
-                    onChange={handleInputChange}
-                    placeholder="Enter product brand"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="category">Category *</label>
-                  <select
-                    id="category"
-                    name="category"
-                    value={formData.category}
-                    onChange={handleInputChange}
-                    required
-                  >
-                    <option value="">Select a category</option>
-
-                    {Array.isArray(categories) && categories.length > 0 ? (
-                      categories.map((category) => (
-                        <option key={category._id} value={category._id}>
-                          {category.pageTitle ||
-                            category.title ||
-                            category.name}
-                        </option>
-                      ))
-                    ) : (
-                      <option disabled>No categories found</option>
-                    )}
-                  </select>
-
-                  {(!categories || categories.length === 0) && (
-                    <p
-                      style={{
-                        marginTop: "8px",
-                        fontSize: "14px",
-                        color: "#666",
-                        fontStyle: "italic",
-                      }}
-                    >
-                      No categories available. Please create categories first.
-                    </p>
-                  )}
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="stockStatus">Stock Status</label>
-                  <select
-                    id="stockStatus"
-                    name="stockStatus"
-                    value={formData.stockStatus}
-                    onChange={handleInputChange}
-                  >
-                    <option key="in-stock" value="in-stock">
-                      In Stock
-                    </option>
-                    <option key="out-of-stock" value="out-of-stock">
-                      Out of Stock
-                    </option>
-                  </select>
-                </div>
-
-                <div className="content-card">
-                  <h3>Product Variants</h3>
-
-                  {formData.variants.map((variant, index) => (
+              {images.length > 0 && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(120px, 1fr))",
+                    gap: "16px",
+                    marginTop: "24px",
+                  }}
+                >
+                  {images.map((image) => (
                     <div
-                      key={index}
+                      key={image.id}
                       style={{
-                        border: "1px solid #ddd",
-                        padding: "12px",
-                        borderRadius: "6px",
-                        marginBottom: "10px",
+                        position: "relative",
+                        borderRadius: "8px",
+                        overflow: "hidden",
+                        border: "1px solid #e5e7eb",
                       }}
                     >
-                      <div className="form-row">
-                        <div className="form-group">
-                          <label>Color</label>
-                          <input
-                            type="text"
-                            value={variant.color}
-                            onChange={(e) =>
-                              handleVariantChange(
-                                index,
-                                "color",
-                                e.target.value,
-                              )
-                            }
-                            placeholder="Red"
-                          />
-                        </div>
+                      <img
+                        src={image.preview}
+                        alt="Preview"
+                        style={{
+                          width: "100%",
+                          height: "120px",
+                          objectFit: "cover",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(image.id)}
+                        style={{
+                          position: "absolute",
+                          top: "8px",
+                          right: "8px",
+                          backgroundColor: "#ef4444",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "50%",
+                          width: "24px",
+                          height: "24px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          fontSize: "16px",
+                        }}
+                      >
+                        <MdClose />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-                        <div className="form-group">
-                          <label>Size</label>
-                          <input
-                            type="text"
-                            value={variant.size}
-                            onChange={(e) =>
-                              handleVariantChange(index, "size", e.target.value)
-                            }
-                            placeholder="M / L / XL"
-                          />
-                        </div>
-                      </div>
+            {/* Name */}
+            <div style={{ marginBottom: "24px" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  marginBottom: "8px",
+                  color: "#374151",
+                }}
+              >
+                Name*
+              </label>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                required
+                disabled={loading}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  outline: "none",
+                  transition: "border-color 0.2s",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+              />
+            </div>
 
-                      <div className="form-row">
-                        <div className="form-group">
-                          <label>Variant Price</label>
-                          <input
-                            type="number"
-                            value={variant.price}
-                            onChange={(e) =>
-                              handleVariantChange(
-                                index,
-                                "price",
-                                e.target.value,
-                              )
-                            }
-                            placeholder="Enter price"
-                          />
-                        </div>
+            {/* URL Slug/SKU */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  URL Slug/SEO*
+                </label>
+                <input
+                  type="text"
+                  name="slug"
+                  value={formData.slug}
+                  onChange={handleInputChange}
+                  required
+                  disabled={loading}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    outline: "none",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  SKU*
+                </label>
+                <input
+                  type="text"
+                  name="sku"
+                  value={formData.sku}
+                  onChange={handleInputChange}
+                  disabled={loading}
+                  placeholder="Leave empty if using variants"
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    outline: "none",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+            </div>
 
-                        <div className="form-group">
-                          <label>Variant Stock</label>
-                          <input
-                            type="number"
-                            value={variant.stock}
-                            onChange={(e) =>
-                              handleVariantChange(
-                                index,
-                                "stock",
-                                e.target.value,
-                              )
-                            }
-                            placeholder="Stock qty"
-                          />
-                        </div>
+            {/* Brand/Category */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Brand (Optional)
+                </label>
+                <input
+                  type="text"
+                  name="brand"
+                  value={formData.brand}
+                  onChange={handleInputChange}
+                  disabled={loading}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    outline: "none",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Category*
+                </label>
+                <select
+                  name="category"
+                  value={formData.category}
+                  onChange={handleInputChange}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    outline: "none",
+                    backgroundColor: "white",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                >
+                  <option value="">Select a category</option>
+                  {categories.map((cat) => (
+                    <option key={cat._id} value={cat._id}>
+                      {cat.pageTitle || cat.title || cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
-                        <div className="form-group">
-                          <label>Variant SKU *</label>
-                          <input
-                            type="text"
-                            value={variant.sku}
-                            onChange={(e) =>
-                              handleVariantChange(index, "sku", e.target.value)
-                            }
-                            placeholder="Enter variant SKU"
-                          />
-                        </div>
-                      </div>
+            {/* Model/Material */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Model Number (Optional)
+                </label>
+                <input
+                  type="text"
+                  name="modelNumber"
+                  value={formData.modelNumber}
+                  onChange={handleInputChange}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    outline: "none",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Product Key*
+                </label>
+                <input
+                  type="text"
+                  name="productKey"
+                  value={formData.productKey}
+                  onChange={handleInputChange}
+                  required
+                  disabled={loading}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    outline: "none",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+            </div>
 
+            {/* Status/Select Material */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Status
+                </label>
+                <select
+                  name="status"
+                  value={formData.status}
+                  onChange={handleInputChange}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    outline: "none",
+                    backgroundColor: "white",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Stock Status
+                </label>
+                <select
+                  name="stockStatus"
+                  value={formData.stockStatus}
+                  onChange={handleInputChange}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    outline: "none",
+                    backgroundColor: "white",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                >
+                  <option value="in-stock">In Stock</option>
+                  <option value="out-of-stock">Out of Stock</option>
+                  <option value="preorder">Low Stock</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Product Categories */}
+            <div style={{ marginBottom: "24px" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  marginBottom: "8px",
+                  color: "#374151",
+                }}
+              >
+                Product Categories
+              </label>
+              <div
+                style={{
+                  fontSize: "13px",
+                  color: "#6b7280",
+                  marginBottom: "12px",
+                }}
+              >
+                Search...
+              </div>
+              <div
+                style={{
+                  padding: "12px",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "8px",
+                  backgroundColor: "#fafafa",
+                  minHeight: "100px",
+                }}
+              >
+                <div style={{ fontSize: "13px", color: "#9ca3af" }}>
+                  Selected categories will appear here
+                </div>
+              </div>
+            </div>
+
+            {/* Description */}
+            <div style={{ marginBottom: "24px" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  marginBottom: "8px",
+                  color: "#374151",
+                }}
+              >
+                Description*
+              </label>
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={handleInputChange}
+                required
+                rows="6"
+                placeholder="Enter detailed product description..."
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  outline: "none",
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+              />
+            </div>
+
+            {/* Shipping & Return Policy */}
+            <div style={{ marginBottom: "24px" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  marginBottom: "8px",
+                  color: "#374151",
+                }}
+              >
+                Warranty*
+              </label>
+              <textarea
+                name="warranty"
+                value={formData.warranty}
+                onChange={handleInputChange}
+                required
+                rows="3"
+                placeholder="e.g., 1 year manufacturer warranty"
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  outline: "none",
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                  marginBottom: "16px",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+              />
+
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  marginBottom: "8px",
+                  color: "#374151",
+                }}
+              >
+                Return Policy*
+              </label>
+              <textarea
+                name="returnPolicy"
+                value={formData.returnPolicy}
+                onChange={handleInputChange}
+                required
+                rows="3"
+                placeholder="e.g., 30 days return policy"
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  outline: "none",
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+              />
+            </div>
+
+            {/* Specifications */}
+            <div style={{ marginBottom: "24px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "12px",
+                }}
+              >
+                <label
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    color: "#374151",
+                  }}
+                >
+
+                </label>
+                <button
+                  type="button"
+                  onClick={addSpecification}
+                  style={{
+                    padding: "6px 12px",
+                    backgroundColor: "#10b981",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "13px",
+                    cursor: "pointer",
+                    fontWeight: "500",
+                  }}
+                >
+                  + Add Specification
+                </button>
+              </div>
+              {formData.specifications.map((spec, index) => (
+                <div
+                  key={index}
+                  style={{ display: "flex", gap: "12px", marginBottom: "12px" }}
+                >
+                  <input
+                    type="text"
+                    value={spec.key}
+                    onChange={(e) =>
+                      handleSpecificationChange(index, "key", e.target.value)
+                    }
+                    placeholder="Key (e.g., Processor)"
+                    style={{
+                      flex: 1,
+                      padding: "10px 12px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      outline: "none",
+                    }}
+                    onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                    onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                  />
+                  <input
+                    type="text"
+                    value={spec.value}
+                    onChange={(e) =>
+                      handleSpecificationChange(index, "value", e.target.value)
+                    }
+                    placeholder="Value (e.g., Intel i7)"
+                    style={{
+                      flex: 1,
+                      padding: "10px 12px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      outline: "none",
+                    }}
+                    onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                    onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeSpecification(index)}
+                    style={{
+                      padding: "10px 16px",
+                      backgroundColor: "#ef4444",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      fontSize: "13px",
+                      cursor: "pointer",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Key Features */}
+            <div style={{ marginBottom: "32px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "12px",
+                }}
+              >
+                <label
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    color: "#374151",
+                  }}
+                >
+                  Key Features (Optional)
+                </label>
+                <button
+                  type="button"
+                  onClick={addKeyFeature}
+                  style={{
+                    padding: "6px 12px",
+                    backgroundColor: "#10b981",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "13px",
+                    cursor: "pointer",
+                    fontWeight: "500",
+                  }}
+                >
+                  + Add Feature
+                </button>
+              </div>
+              {formData.keyFeatures.map((feature, index) => (
+                <div
+                  key={index}
+                  style={{ display: "flex", gap: "12px", marginBottom: "12px" }}
+                >
+                  <input
+                    type="text"
+                    value={feature.key}
+                    onChange={(e) =>
+                      handleKeyFeatureChange(index, "key", e.target.value)
+                    }
+                    placeholder="Feature name"
+                    style={{
+                      flex: 1,
+                      padding: "10px 12px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      outline: "none",
+                    }}
+                    onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                    onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                  />
+                  <input
+                    type="text"
+                    value={feature.value}
+                    onChange={(e) =>
+                      handleKeyFeatureChange(index, "value", e.target.value)
+                    }
+                    placeholder="Feature description"
+                    style={{
+                      flex: 1,
+                      padding: "10px 12px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      outline: "none",
+                    }}
+                    onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                    onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeKeyFeature(index)}
+                    style={{
+                      padding: "10px 16px",
+                      backgroundColor: "#ef4444",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      fontSize: "13px",
+                      cursor: "pointer",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Additional fields - Tags, SEO etc */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Tags (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  name="tags"
+                  value={formData.tags.join(", ")}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      tags: e.target.value
+                        .split(",")
+                        .map((t) => t.trim())
+                        .filter(Boolean),
+                    }))
+                  }
+                  placeholder="electronics, smartphone, 5G"
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    outline: "none",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  SEO Keywords (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  name="keywords"
+                  value={formData.keywords.join(", ")}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      keywords: e.target.value
+                        .split(",")
+                        .map((k) => k.trim())
+                        .filter(Boolean),
+                    }))
+                  }
+                  placeholder="keyword1, keyword2"
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    outline: "none",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+            </div>
+
+            {/* Variants */}
+            {formData.variants.length > 0 && (
+              <div style={{ marginBottom: "32px" }}>
+                <h3
+                  style={{
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    marginBottom: "16px",
+                    color: "#111827",
+                  }}
+                >
+                  Variants
+                </h3>
+                {formData.variants.map((variant, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      padding: "20px",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: "8px",
+                      marginBottom: "16px",
+                      backgroundColor: "#fafafa",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "16px",
+                      }}
+                    >
+                      <h4
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: "600",
+                          color: "#111827",
+                        }}
+                      >
+                        Variant {index + 1}
+                      </h4>
                       <button
                         type="button"
                         onClick={() => removeVariant(index)}
                         style={{
-                          background: "#dc2626",
-                          color: "#fff",
+                          padding: "6px 12px",
+                          backgroundColor: "#ef4444",
+                          color: "white",
                           border: "none",
-                          padding: "5px 10px",
-                          borderRadius: "4px",
+                          borderRadius: "6px",
+                          fontSize: "13px",
                           cursor: "pointer",
+                          fontWeight: "500",
                         }}
                       >
-                        Remove Variant
+                        Remove
                       </button>
                     </div>
-                  ))}
-
-                  <button
-                    type="button"
-                    onClick={addVariant}
-                    style={{
-                      background: "#2563eb",
-                      color: "#fff",
-                      border: "none",
-                      padding: "8px 12px",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    + Add Variant
-                  </button>
-                </div>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr 1fr",
+                        gap: "12px",
+                      }}
+                    >
+                      <div>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "13px",
+                            fontWeight: "500",
+                            marginBottom: "6px",
+                            color: "#374151",
+                          }}
+                        >
+                          Color
+                        </label>
+                        <input
+                          type="text"
+                          value={variant.attributes.color}
+                          onChange={(e) =>
+                            handleVariantChange(
+                              index,
+                              "attributes.color",
+                              e.target.value,
+                            )
+                          }
+                          placeholder="Red, Blue"
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            outline: "none",
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "13px",
+                            fontWeight: "500",
+                            marginBottom: "6px",
+                            color: "#374151",
+                          }}
+                        >
+                          Size
+                        </label>
+                        <input
+                          type="text"
+                          value={variant.attributes.size}
+                          onChange={(e) =>
+                            handleVariantChange(
+                              index,
+                              "attributes.size",
+                              e.target.value,
+                            )
+                          }
+                          placeholder="S, M, L"
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            outline: "none",
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "13px",
+                            fontWeight: "500",
+                            marginBottom: "6px",
+                            color: "#374151",
+                          }}
+                        >
+                          Model
+                        </label>
+                        <input
+                          type="text"
+                          value={variant.attributes.model}
+                          onChange={(e) =>
+                            handleVariantChange(
+                              index,
+                              "attributes.model",
+                              e.target.value,
+                            )
+                          }
+                          placeholder="Pro, Basic"
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            outline: "none",
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr 1fr",
+                        gap: "12px",
+                        marginTop: "12px",
+                      }}
+                    >
+                      <div>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "13px",
+                            fontWeight: "500",
+                            marginBottom: "6px",
+                            color: "#374151",
+                          }}
+                        >
+                          SKU
+                        </label>
+                        <input
+                          type="text"
+                          value={variant.sku}
+                          onChange={(e) =>
+                            handleVariantChange(index, "sku", e.target.value)
+                          }
+                          placeholder="Variant SKU"
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            outline: "none",
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "13px",
+                            fontWeight: "500",
+                            marginBottom: "6px",
+                            color: "#374151",
+                          }}
+                        >
+                          Price
+                        </label>
+                        <input
+                          type="number"
+                          value={variant.price}
+                          onChange={(e) =>
+                            handleVariantChange(index, "price", e.target.value)
+                          }
+                          placeholder="0.00"
+                          step="0.01"
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            outline: "none",
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "13px",
+                            fontWeight: "500",
+                            marginBottom: "6px",
+                            color: "#374151",
+                          }}
+                        >
+                          Stock
+                        </label>
+                        <input
+                          type="number"
+                          value={variant.stockQuantity}
+                          onChange={(e) =>
+                            handleVariantChange(
+                              index,
+                              "stockQuantity",
+                              e.target.value,
+                            )
+                          }
+                          placeholder="0"
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            outline: "none",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
+            )}
 
-              <div className="content-card">
-                <h3>Pricing & Inventory</h3>
+            <button
+              type="button"
+              onClick={addVariant}
+              style={{
+                padding: "10px 20px",
+                backgroundColor: "#3b82f6",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                fontSize: "14px",
+                cursor: "pointer",
+                fontWeight: "500",
+                marginBottom: "32px",
+              }}
+            >
+              + Add Variant
+            </button>
 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="mrp">MRP (Maximum Retail Price)</label>
+            {/* Pricing (if no variants) */}
+            {formData.variants.length === 0 && (
+              <div style={{ marginBottom: "32px" }}>
+                <h3
+                  style={{
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    marginBottom: "16px",
+                    color: "#111827",
+                  }}
+                >
+                  Pricing Details
+                </h3>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr 1fr",
+                    gap: "16px",
+                  }}
+                >
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        marginBottom: "8px",
+                        color: "#374151",
+                      }}
+                    >
+                      MRP (₹)
+                    </label>
                     <input
                       type="number"
-                      id="mrp"
                       name="mrp"
                       value={formData.mrp}
                       onChange={handleInputChange}
                       min="0"
                       step="0.01"
                       placeholder="0.00"
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        outline: "none",
+                      }}
+                      onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                      onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
                     />
                   </div>
-
-                  <div className="form-group">
-                    <label htmlFor="price">Selling Price *</label>
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        marginBottom: "8px",
+                        color: "#374151",
+                      }}
+                    >
+                      Selling Price (₹)
+                    </label>
                     <input
                       type="number"
-                      id="price"
-                      name="price"
-                      value={formData.price}
+                      name="sellingPrice"
+                      value={formData.sellingPrice}
                       onChange={handleInputChange}
                       min="0"
                       step="0.01"
-                      required
                       placeholder="0.00"
                       style={{
-                        borderColor: priceValidationMessage
-                          ? "#dc2626"
-                          : undefined,
+                        width: "100%",
+                        padding: "10px 12px",
+                        border: priceValidationMessage
+                          ? "1px solid #ef4444"
+                          : "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        outline: "none",
                       }}
+                      onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                      onBlur={(e) =>
+                        (e.target.style.borderColor = priceValidationMessage
+                          ? "#ef4444"
+                          : "#d1d5db")
+                      }
                     />
                     {priceValidationMessage && (
                       <div
                         style={{
+                          fontSize: "13px",
+                          color: "#ef4444",
                           marginTop: "4px",
-                          fontSize: "14px",
-                          color: "#dc2626",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
                         }}
                       >
                         {priceValidationMessage}
                       </div>
                     )}
                   </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="discountPrice">
-                      Discount / Offer Price
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        marginBottom: "8px",
+                        color: "#374151",
+                      }}
+                    >
+                      Cost Price (₹)
                     </label>
                     <input
                       type="number"
-                      id="discountPrice"
-                      name="discountPrice"
-                      value={formData.discountPrice}
+                      name="costPrice"
+                      value={formData.costPrice}
                       onChange={handleInputChange}
                       min="0"
                       step="0.01"
                       placeholder="0.00"
-                    />
-                    <small className="form-hint">
-                      Special promotional price (if different from selling
-                      price)
-                    </small>
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="stockQuantity">Stock Quantity</label>
-                    <input
-                      type="number"
-                      id="stockQuantity"
-                      name="stockQuantity"
-                      value={formData.stockQuantity}
-                      onChange={handleInputChange}
-                      min="0"
-                      placeholder="0"
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        outline: "none",
+                      }}
+                      onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                      onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
                     />
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            <div className="form-section">
-              <div className="content-card">
-                <h3>Description</h3>
-                <div className="form-group">
-                  <label htmlFor="description">Product Description</label>
-                  <textarea
-                    id="description"
-                    name="description"
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    rows="6"
-                    placeholder="Enter product description..."
-                  />
-                </div>
-              </div>
-
-              <div className="content-card">
-                <h3>Specifications</h3>
-                <div className="form-group">
-                  <label htmlFor="specification">Product Specifications</label>
-                  <textarea
-                    id="specification"
-                    name="specification"
-                    value={formData.specification}
-                    onChange={handleInputChange}
-                    rows="8"
-                    placeholder="Enter specifications..."
-                  />
-                </div>
-              </div>
-
-              <div className="content-card">
-                <h3>Physical Details</h3>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="weight">Weight</label>
-                    <input
-                      type="text"
-                      id="weight"
-                      name="weight"
-                      value={formData.weight}
-                      onChange={handleInputChange}
-                      placeholder="e.g., 2.5 kg"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="dimensions">Dimensions</label>
-                    <input
-                      type="text"
-                      id="dimensions"
-                      name="dimensions"
-                      value={formData.dimensions}
-                      onChange={handleInputChange}
-                      placeholder="e.g., 30 x 20 x 15 cm"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="productKey">Product Key *</label>
+            {/* Stock & Dimensions */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 1fr 1fr",
+                gap: "16px",
+                marginBottom: "32px",
+              }}
+            >
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Stock Quantity
+                </label>
                 <input
-                  type="text"
-                  id="productKey"
-                  name="productKey"
-                  value={formData.productKey}
+                  type="number"
+                  name="stockQuantity"
+                  value={formData.stockQuantity}
                   onChange={handleInputChange}
-                  placeholder="Enter unique product key"
-                  required
-                  disabled={loading}
+                  min="0"
+                  placeholder="0"
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    outline: "none",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
                 />
-                <small className="form-hint">
-                  Unique identifier for recommendations or internal use
-                </small>
               </div>
-
-              <div className="content-card">
-                <h3>Warranty & Returns</h3>
-                <div className="form-group">
-                  <label htmlFor="warranty">
-                    Warranty / Guarantee Information
-                  </label>
-                  <textarea
-                    id="warranty"
-                    name="warranty"
-                    value={formData.warranty}
-                    onChange={handleInputChange}
-                    rows="3"
-                    placeholder="e.g., 1 year manufacturer warranty + 2 years extended warranty available"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="returnPolicy">
-                    Return Policy Information
-                  </label>
-                  <textarea
-                    id="returnPolicy"
-                    name="returnPolicy"
-                    value={formData.returnPolicy}
-                    onChange={handleInputChange}
-                    rows="3"
-                    placeholder="e.g., 30 days return policy. Product must be in original condition."
-                  />
-                </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Weight (kg)
+                </label>
+                <input
+                  type="number"
+                  name="dimensions.weight"
+                  value={formData.dimensions.weight}
+                  onChange={handleInputChange}
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    outline: "none",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
               </div>
-
-              <div className="content-card">
-                <h3>Advanced (for eCommerce)</h3>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="barcode">Barcode / QR Code</label>
-                    <input
-                      type="text"
-                      id="barcode"
-                      name="barcode"
-                      value={formData.barcode}
-                      onChange={handleInputChange}
-                      placeholder="Enter barcode or QR code"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="hsnCode">HSN / GST Code</label>
-                    <input
-                      type="text"
-                      id="hsnCode"
-                      name="hsnCode"
-                      value={formData.hsnCode}
-                      onChange={handleInputChange}
-                      placeholder="Enter HSN code"
-                    />
-                  </div>
-                </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Length (cm)
+                </label>
+                <input
+                  type="number"
+                  name="dimensions.length"
+                  value={formData.dimensions.length}
+                  onChange={handleInputChange}
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    outline: "none",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
               </div>
-
-              <div className="content-card">
-                <h3>Supplier / Vendor Details</h3>
-                <div className="form-group">
-                  <label htmlFor="supplier.name">Supplier Name</label>
-                  <input
-                    type="text"
-                    id="supplier.name"
-                    name="supplier.name"
-                    value={formData.supplier.name}
-                    onChange={handleInputChange}
-                    placeholder="Enter supplier name"
-                  />
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="supplier.contact">Supplier Contact</label>
-                    <input
-                      type="text"
-                      id="supplier.contact"
-                      name="supplier.contact"
-                      value={formData.supplier.contact}
-                      onChange={handleInputChange}
-                      placeholder="Enter contact number"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="supplier.email">Supplier Email</label>
-                    <input
-                      type="email"
-                      id="supplier.email"
-                      name="supplier.email"
-                      value={formData.supplier.email}
-                      onChange={handleInputChange}
-                      placeholder="Enter email address"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="content-card">
-                <h3>Shipping Information</h3>
-                <div className="form-group">
-                  <label htmlFor="shipping.charges">Shipping Charges</label>
-                  <input
-                    type="text"
-                    id="shipping.charges"
-                    name="shipping.charges"
-                    value={formData.shipping.charges}
-                    onChange={handleInputChange}
-                    placeholder="e.g., Free delivery, ₹50, etc."
-                  />
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="shipping.deliveryTime">Delivery Time</label>
-                    <input
-                      type="text"
-                      id="shipping.deliveryTime"
-                      name="shipping.deliveryTime"
-                      value={formData.shipping.deliveryTime}
-                      onChange={handleInputChange}
-                      placeholder="e.g., 2-5 business days"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="shipping.restrictions">
-                      Shipping Restrictions
-                    </label>
-                    <input
-                      type="text"
-                      id="shipping.restrictions"
-                      name="shipping.restrictions"
-                      value={formData.shipping.restrictions}
-                      onChange={handleInputChange}
-                      placeholder="e.g., No cash on delivery"
-                    />
-                  </div>
-                </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Width (cm)
+                </label>
+                <input
+                  type="number"
+                  name="dimensions.width"
+                  value={formData.dimensions.width}
+                  onChange={handleInputChange}
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    outline: "none",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
               </div>
             </div>
-          </div>
 
-          {/* Add inside the second form-section or wherever suitable */}
-          <div className="content-card">
-            <h3>Additional Product Details</h3>
-
-            <div className="form-group">
-              <label htmlFor="resolution">Resolution</label>
-              <input
-                type="text"
-                id="resolution"
-                name="resolution"
-                value={formData.resolution}
-                onChange={handleInputChange}
-                placeholder="e.g., HD, Full-HD, 4K"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="screenSize">Screen Size</label>
-              <input
-                type="number"
-                id="screenSize"
-                name="screenSize"
-                value={formData.screenSize}
-                onChange={handleInputChange}
-                placeholder="Enter screen size in inches"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="tags">Product Tags</label>
-              <input
-                type="text"
-                id="tags"
-                name="tags"
-                value={formData.tags}
-                onChange={handleInputChange}
-                placeholder="Enter comma-separated tags for SEO"
-              />
-              <small className="form-hint">
-                Example: electronics, smart-tv, 4k
-              </small>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="isRecommended">
+            {/* Checkboxes */}
+            <div
+              style={{
+                marginBottom: "32px",
+                display: "flex",
+                gap: "24px",
+                flexWrap: "wrap",
+              }}
+            >
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "14px",
+                  color: "#374151",
+                  cursor: "pointer",
+                }}
+              >
                 <input
                   type="checkbox"
-                  id="isRecommended"
                   name="isRecommended"
                   checked={formData.isRecommended}
                   onChange={handleInputChange}
+                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
                 />
-                Mark as Recommended
+                Recommended Product
+              </label>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "14px",
+                  color: "#374151",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  name="isFeatured"
+                  checked={formData.isFeatured}
+                  onChange={handleInputChange}
+                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                />
+                Featured Product
+              </label>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "14px",
+                  color: "#374151",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  name="isDigital"
+                  checked={formData.isDigital}
+                  onChange={handleInputChange}
+                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                />
+                Digital Product
+              </label>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "14px",
+                  color: "#374151",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  name="allowBackorder"
+                  checked={formData.allowBackorder}
+                  onChange={handleInputChange}
+                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                />
+                Allow Backorder
               </label>
             </div>
           </div>
 
-          <div className="form-actions">
+          {/* Footer Actions */}
+          <div
+            style={{
+              padding: "20px 32px",
+              borderTop: "1px solid #e5e7eb",
+              backgroundColor: "#fafafa",
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "12px",
+            }}
+          >
+            <Link
+              to="/admin/products/list"
+              style={{
+                padding: "10px 20px",
+                backgroundColor: "white",
+                color: "#374151",
+                border: "1px solid #d1d5db",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontSize: "14px",
+                fontWeight: "500",
+                display: "inline-flex",
+                alignItems: "center",
+              }}
+            >
+              Cancel
+            </Link>
             <button
               type="submit"
-              className="btn btn-primary"
-              disabled={loading}
+              disabled={loading || !categories || categories.length === 0}
+              style={{
+                padding: "10px 24px",
+                backgroundColor: loading ? "#9ca3af" : "#3b82f6",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                fontSize: "14px",
+                fontWeight: "500",
+                cursor: loading ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
             >
               <MdSave size={16} />
               {loading ? "Creating..." : "Create Product"}
             </button>
-            <Link to="/products/list" className="btn btn-secondary">
-              Cancel
-            </Link>
           </div>
         </form>
       </div>
+
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}
+      </style>
     </div>
   );
 }

@@ -60,7 +60,7 @@ function TopProducts() {
     <div className="content-card">
       <div className="table-header">
         <h3>Top Products</h3>
-        <Link className="view-all-link" to="/products/list">View all</Link>
+        <Link className="view-all-link" to="/admin/products/list">View all</Link>
       </div>
 
       {loading ? (

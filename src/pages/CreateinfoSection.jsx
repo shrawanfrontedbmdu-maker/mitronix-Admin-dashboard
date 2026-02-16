@@ -1,8 +1,9 @@
-// CreateInfoSection.jsx
-import { useState } from "react";
+// src/pages/home/CreateInfoSection.jsx
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { MdAdd, MdClose, MdCloudUpload } from "react-icons/md";
+import { MdAdd, MdClose } from "react-icons/md";
 import { infoSectionService } from "../api/infoSectionServices.js";
+import { categoryService } from "../api/categoryService.js";
 
 function CreateInfoSection() {
   const navigate = useNavigate();
@@ -11,13 +12,27 @@ function CreateInfoSection() {
   const [description, setDescription] = useState("");
   const [image, setImage] = useState(null);
   const [cards, setCards] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // ===== Handle main image =====
+  // Fetch categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const data = await categoryService.getCategories();
+        setCategories(data);
+      } catch (err) {
+        console.error("Failed to load categories:", err);
+      }
+    };
+    fetchCategories();
+  }, []);
+
   const handleImageChange = (e) => setImage(e.target.files[0]);
 
-  // ===== Handle card addition =====
-  const addCard = () => setCards((prev) => [...prev, { title: "", description: "", image: null }]);
+  const addCard = () =>
+    setCards((prev) => [...prev, { title: "", description: "", image: null }]);
 
   const handleCardChange = (index, field, value) => {
     setCards((prev) => {
@@ -27,9 +42,9 @@ function CreateInfoSection() {
     });
   };
 
-  const removeCard = (index) => setCards((prev) => prev.filter((_, i) => i !== index));
+  const removeCard = (index) =>
+    setCards((prev) => prev.filter((_, i) => i !== index));
 
-  // ===== Submit form =====
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title) return alert("Title is required");
@@ -39,9 +54,12 @@ function CreateInfoSection() {
     formData.append("subtitle", subtitle);
     formData.append("description", description);
     if (image) formData.append("image", image);
+    if (selectedCategory) formData.append("category", selectedCategory);
 
-    // Cards
-    formData.append("cards", JSON.stringify(cards.map(({ title, description }) => ({ title, description })))); // card data without images
+    formData.append(
+      "cards",
+      JSON.stringify(cards.map(({ title, description }) => ({ title, description })))
+    );
     cards.forEach((card, i) => {
       if (card.image) formData.append(`cardImage_${i}`, card.image);
     });
@@ -58,152 +76,144 @@ function CreateInfoSection() {
       setLoading(false);
     }
   };
-return (
-  <div className="page-container" style={{ maxWidth: "800px", margin: "0 auto", padding: "20px" }}>
-    <h1 style={{ fontSize: "2rem", fontWeight: "700", marginBottom: "20px", textAlign: "center" }}>
-      Create InfoSection
-    </h1>
 
-    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      
-      {/* Form Card */}
-      <div style={{
-        background: "#fff",
-        padding: "20px",
-        borderRadius: "12px",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-        display: "flex",
-        flexDirection: "column",
-        gap: "15px"
-      }}>
-        <label style={{ display: "flex", flexDirection: "column", fontWeight: "500" }}>
-          Title* 
-          <input 
-            type="text" 
-            value={title} 
-            onChange={(e) => setTitle(e.target.value)} 
-            required 
-            style={{ padding: "10px", borderRadius: "8px", border: "1px solid #ccc", marginTop: "5px" }}
-          />
-        </label>
+  return (
+    <div className="max-w-3xl mx-auto p-5">
+      <h1 className="text-2xl font-bold mb-6 text-center">Create InfoSection</h1>
 
-        <label style={{ display: "flex", flexDirection: "column", fontWeight: "500" }}>
-          Subtitle
-          <input 
-            type="text" 
-            value={subtitle} 
-            onChange={(e) => setSubtitle(e.target.value)} 
-            style={{ padding: "10px", borderRadius: "8px", border: "1px solid #ccc", marginTop: "5px" }}
-          />
-        </label>
+      <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
+        {/* Main Info Section */}
+        <div className="bg-white p-6 rounded-xl shadow-md flex flex-col gap-4">
+          <label className="flex flex-col font-medium">
+            Title* 
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              className="mt-2 p-2 border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </label>
 
-        <label style={{ display: "flex", flexDirection: "column", fontWeight: "500" }}>
-          Description
-          <textarea 
-            value={description} 
-            onChange={(e) => setDescription(e.target.value)} 
-            rows={4}
-            style={{ padding: "10px", borderRadius: "8px", border: "1px solid #ccc", marginTop: "5px" }}
-          />
-        </label>
+          <label className="flex flex-col font-medium">
+            Subtitle
+            <input
+              type="text"
+              value={subtitle}
+              onChange={(e) => setSubtitle(e.target.value)}
+              className="mt-2 p-2 border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </label>
 
-        <label style={{ display: "flex", flexDirection: "column", fontWeight: "500" }}>
-          Main Image
-          <input 
-            type="file" 
-            accept="image/*" 
-            onChange={handleImageChange} 
-            style={{ marginTop: "5px" }}
-          />
-        </label>
-      </div>
+          <label className="flex flex-col font-medium">
+            Description
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              className="mt-2 p-2 border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </label>
 
-      {/* Cards Section */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-        <h3 style={{ fontSize: "1.25rem", fontWeight: "600" }}>Cards</h3>
-        {cards.map((card, i) => (
-          <div key={i} style={{
-            background: "#f9f9f9",
-            padding: "15px",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-            position: "relative",
-            display: "flex",
-            flexDirection: "column",
-            gap: "10px"
-          }}>
-            <button 
-              type="button" 
-              onClick={() => removeCard(i)} 
-              style={{
-                position: "absolute",
-                top: "10px",
-                right: "10px",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                color: "#f56565",
-                fontSize: "1.2rem"
-              }}
+          <label className="flex flex-col font-medium">
+            Category
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="mt-2 p-2 border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
             >
-              <MdClose />
-            </button>
+              <option value="">Select a Category</option>
+              {categories.map((cat) => (
+                <option key={cat._id} value={cat._id}>
+                  {cat.pageTitle}
+                </option>
+              ))}
+            </select>
+          </label>
 
-            <label style={{ display: "flex", flexDirection: "column", fontWeight: "500" }}>
-              Card Title
-              <input 
-                type="text" 
-                value={card.title} 
-                onChange={(e) => handleCardChange(i, "title", e.target.value)} 
-                style={{ padding: "8px", borderRadius: "8px", border: "1px solid #ccc", marginTop: "5px" }}
-              />
-            </label>
+          <label className="flex flex-col font-medium">
+            Image
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="mt-2"
+            />
+          </label>
+        </div>
 
-            <label style={{ display: "flex", flexDirection: "column", fontWeight: "500" }}>
-              Card Description
-              <input 
-                type="text" 
-                value={card.description} 
-                onChange={(e) => handleCardChange(i, "description", e.target.value)} 
-                style={{ padding: "8px", borderRadius: "8px", border: "1px solid #ccc", marginTop: "5px" }}
-              />
-            </label>
+        {/* Cards Section */}
+        <div className="flex flex-col gap-4">
+          <h3 className="text-lg font-semibold">Cards</h3>
+          {cards.map((card, i) => (
+            <div
+              key={i}
+              className="bg-gray-50 p-4 rounded-xl shadow-sm relative flex flex-col gap-3"
+            >
+              <button
+                type="button"
+                onClick={() => removeCard(i)}
+                className="absolute top-2 right-2 text-red-500 hover:text-red-600"
+              >
+                <MdClose size={20} />
+              </button>
 
-            <label style={{ display: "flex", flexDirection: "column", fontWeight: "500" }}>
-              Card Image
-              <input 
-                type="file" 
-                accept="image/*" 
-                onChange={(e) => handleCardChange(i, "image", e.target.files[0])} 
-                style={{ marginTop: "5px" }}
-              />
-            </label>
-          </div>
-        ))}
+              <label className="flex flex-col font-medium">
+                Card Title
+                <input
+                  type="text"
+                  value={card.title}
+                  onChange={(e) => handleCardChange(i, "title", e.target.value)}
+                  className="mt-1 p-2 border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+              </label>
 
-        <button 
-          type="button" 
-          className="btn btn-secondary" 
-          onClick={addCard} 
-          style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 15px", borderRadius: "8px", background: "#edf2f7", border: "1px solid #ccc", cursor: "pointer", fontWeight: "500" }}
+              <label className="flex flex-col font-medium">
+                Card Description
+                <input
+                  type="text"
+                  value={card.description}
+                  onChange={(e) =>
+                    handleCardChange(i, "description", e.target.value)
+                  }
+                  className="mt-1 p-2 border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+              </label>
+
+              <label className="flex flex-col font-medium">
+                Card Image
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleCardChange(i, "image", e.target.files[0])}
+                  className="mt-1"
+                />
+              </label>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={addCard}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 font-medium text-gray-700"
+          >
+            <MdAdd size={20} /> Add Card
+          </button>
+        </div>
+
+        {/* Submit Button */}
+        <button
+          type="submit"
+          disabled={loading}
+          className={`w-full py-3 rounded-lg text-white font-semibold ${
+            loading ? "bg-blue-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+          }`}
         >
-          <MdAdd /> Add Card
+          {loading ? "Creating..." : "Create InfoSection"}
         </button>
-      </div>
-
-      {/* Submit Button */}
-      <button 
-        type="submit" 
-        className="btn btn-primary" 
-        disabled={loading} 
-        style={{ padding: "12px 20px", borderRadius: "8px", background: "#3182ce", color: "#fff", fontWeight: "600", cursor: loading ? "not-allowed" : "pointer", marginTop: "10px" }}
-      > 
-        {loading ? "Creating..." : "Create InfoSection"}
-      </button>
-    </form>
-  </div>
-);
-
+      </form>
+    </div>
+  );
 }
 
 export default CreateInfoSection;

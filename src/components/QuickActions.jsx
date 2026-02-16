@@ -3,11 +3,11 @@ import { MdAdd, MdCategory, MdReceiptLong, MdNoteAdd, MdGroup } from 'react-icon
 
 function QuickActions() {
   const actions = [
-    { to: '/products/create', icon: <MdAdd size={18} />, label: 'Add Product' },
-    { to: '/categories/create', icon: <MdCategory size={18} />, label: 'Add Category' },
-    { to: '/brands/create', icon: <MdGroup size={18} />, label: 'Add Brand' },
-    { to: '/orders/list', icon: <MdReceiptLong size={18} />, label: 'View Orders' },
-    { to: '/orders/add', icon: <MdNoteAdd size={18} />, label: 'Add Enquiry' },
+    { to: '/admin/products/create', icon: <MdAdd size={18} />, label: 'Add Product' },
+    { to: '/admin/categories/create', icon: <MdCategory size={18} />, label: 'Add Category' },
+    { to: '/admin/brands/create', icon: <MdGroup size={18} />, label: 'Add Brand' },
+    { to: '/admin/orders/list', icon: <MdReceiptLong size={18} />, label: 'View Orders' },
+    { to: '/admin/orders/add', icon: <MdNoteAdd size={18} />, label: 'Add Enquiry' },
   ]
 
   return (

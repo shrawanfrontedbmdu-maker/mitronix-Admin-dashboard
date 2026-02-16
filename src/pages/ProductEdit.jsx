@@ -6,6 +6,7 @@ import {
   MdDelete,
   MdClose,
   MdCloudUpload,
+  MdAdd,
 } from "react-icons/md";
 import { productService } from "../api/productService.js";
 import { categoryService } from "../api/categoryService.js";
@@ -24,24 +25,13 @@ function ProductEdit() {
     modelNumber: "",
     mrp: "",
     sellingPrice: "",
-    costPrice: "",
     currency: "INR",
     sku: "",
     stockQuantity: 0,
-    stockStatus: "in-stock",
-    lowStockThreshold: 5,
-    allowBackorder: false,
-    reservedQuantity: 0,
     specifications: [],
     keyFeatures: [],
     variants: [],
-    dimensions: {
-      weight: "",
-      length: "",
-      width: "",
-      height: "",
-      unit: "cm",
-    },
+    dimensions: { weight: "", length: "", width: "", height: "", unit: "cm" },
     warranty: "",
     returnPolicy: "",
     isRecommended: false,
@@ -52,10 +42,9 @@ function ProductEdit() {
     metaDescription: "",
     keywords: [],
     tags: [],
-    relatedProducts: [],
-    existingImages: [],
-    imagesToDelete: [],
-    newImageFiles: [],
+    existingImages: [], // Cloudinary se aayi hain
+    imagesToDelete: [], // public_ids jo delete karni hain
+    newImageFiles: [], // Naye File objects
   });
 
   const [imagePreviews, setImagePreviews] = useState([]);
@@ -67,6 +56,7 @@ function ProductEdit() {
   const [priceValidationMessage, setPriceValidationMessage] = useState("");
   const [dragOver, setDragOver] = useState(false);
 
+  /* ===== FETCH PRODUCT + CATEGORIES ===== */
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -89,14 +79,9 @@ function ProductEdit() {
             modelNumber: product.modelNumber || "",
             mrp: product.mrp || "",
             sellingPrice: product.sellingPrice || "",
-            costPrice: product.costPrice || "",
             currency: product.currency || "INR",
             sku: product.sku || "",
             stockQuantity: product.stockQuantity || 0,
-            stockStatus: product.stockStatus || "in-stock",
-            lowStockThreshold: product.lowStockThreshold || 5,
-            allowBackorder: product.allowBackorder || false,
-            reservedQuantity: product.reservedQuantity || 0,
             specifications: product.specifications || [],
             keyFeatures: product.keyFeatures || [],
             variants: product.variants || [],
@@ -117,7 +102,6 @@ function ProductEdit() {
             metaDescription: product.metaDescription || "",
             keywords: product.keywords || [],
             tags: product.tags || [],
-            relatedProducts: product.relatedProducts || [],
             existingImages: product.images || [],
             imagesToDelete: [],
             newImageFiles: [],
@@ -135,25 +119,24 @@ function ProductEdit() {
       }
     };
 
-    if (id) {
-      fetchData();
-    }
+    if (id) fetchData();
   }, [id]);
 
+  /* ===== CLEANUP BLOB URLs ON UNMOUNT ===== */
   useEffect(() => {
     return () => {
       imagePreviews.forEach((url) => URL.revokeObjectURL(url));
     };
   }, [imagePreviews]);
 
-  const generateSlug = (name) => {
-    return name
+  /* ===== HELPERS ===== */
+  const generateSlug = (name) =>
+    name
       .toLowerCase()
       .trim()
       .replace(/[^\w\s-]/g, "")
       .replace(/[\s_-]+/g, "-")
       .replace(/^-+|-+$/g, "");
-  };
 
   const validatePricing = (sellingPrice, mrp) => {
     if (sellingPrice && mrp && parseFloat(sellingPrice) > parseFloat(mrp)) {
@@ -163,6 +146,7 @@ function ProductEdit() {
     }
   };
 
+  /* ===== INPUT HANDLERS ===== */
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     const val = type === "checkbox" ? checked : value;
@@ -172,59 +156,60 @@ function ProductEdit() {
         const [parent, child] = name.split(".");
         return { ...prev, [parent]: { ...prev[parent], [child]: val } };
       }
-
       const newData = { ...prev, [name]: val };
-      if (name === "name") newData.slug = generateSlug(val);
+      if (name === "name") {
+        newData.slug = generateSlug(val);
+        if (!prev.metaTitle) newData.metaTitle = val;
+      }
       if (name === "sellingPrice" || name === "mrp") {
-        const currentPrice =
-          name === "sellingPrice" ? val : newData.sellingPrice;
-        const currentMrp = name === "mrp" ? val : newData.mrp;
-        validatePricing(currentPrice, currentMrp);
+        const sp = name === "sellingPrice" ? val : newData.sellingPrice;
+        const mrp = name === "mrp" ? val : newData.mrp;
+        validatePricing(sp, mrp);
       }
       return newData;
     });
   };
 
+  /* ===== SPECIFICATIONS ===== */
   const handleSpecificationChange = (index, field, value) => {
     const updated = [...formData.specifications];
     updated[index][field] = value;
     setFormData((prev) => ({ ...prev, specifications: updated }));
   };
-
-  const addSpecification = () => {
+  const addSpecification = () =>
     setFormData((prev) => ({
       ...prev,
       specifications: [...prev.specifications, { key: "", value: "" }],
     }));
-  };
+  const removeSpecification = (index) =>
+    setFormData((prev) => ({
+      ...prev,
+      specifications: prev.specifications.filter((_, i) => i !== index),
+    }));
 
-  const removeSpecification = (index) => {
-    const updated = formData.specifications.filter((_, i) => i !== index);
-    setFormData((prev) => ({ ...prev, specifications: updated }));
-  };
-
+  /* ===== KEY FEATURES ===== */
   const handleKeyFeatureChange = (index, field, value) => {
     const updated = [...formData.keyFeatures];
     updated[index][field] = value;
     setFormData((prev) => ({ ...prev, keyFeatures: updated }));
   };
-
-  const addKeyFeature = () => {
+  const addKeyFeature = () =>
     setFormData((prev) => ({
       ...prev,
       keyFeatures: [...prev.keyFeatures, { key: "", value: "" }],
     }));
-  };
+  const removeKeyFeature = (index) =>
+    setFormData((prev) => ({
+      ...prev,
+      keyFeatures: prev.keyFeatures.filter((_, i) => i !== index),
+    }));
 
-  const removeKeyFeature = (index) => {
-    const updated = formData.keyFeatures.filter((_, i) => i !== index);
-    setFormData((prev) => ({ ...prev, keyFeatures: updated }));
-  };
-
+  /* ===== VARIANTS ===== */
   const handleVariantChange = (index, field, value) => {
     const updatedVariants = [...formData.variants];
     if (field.includes(".")) {
       const [parent, child] = field.split(".");
+      if (!updatedVariants[index][parent]) updatedVariants[index][parent] = {};
       updatedVariants[index][parent][child] = value;
     } else {
       updatedVariants[index][field] = value;
@@ -232,15 +217,47 @@ function ProductEdit() {
     setFormData((prev) => ({ ...prev, variants: updatedVariants }));
   };
 
-  const addVariant = () => {
+  const handleVariantSpecChange = (variantIndex, specIndex, field, value) => {
+    const updatedVariants = [...formData.variants];
+    if (!updatedVariants[variantIndex].specifications)
+      updatedVariants[variantIndex].specifications = [];
+    updatedVariants[variantIndex].specifications[specIndex][field] = value;
+    setFormData((prev) => ({ ...prev, variants: updatedVariants }));
+  };
+
+  const addVariantSpecification = (variantIndex) => {
+    const updatedVariants = [...formData.variants];
+    if (!updatedVariants[variantIndex].specifications)
+      updatedVariants[variantIndex].specifications = [];
+    updatedVariants[variantIndex].specifications.push({ key: "", value: "" });
+    setFormData((prev) => ({ ...prev, variants: updatedVariants }));
+  };
+
+  const removeVariantSpecification = (variantIndex, specIndex) => {
+    const updatedVariants = [...formData.variants];
+    updatedVariants[variantIndex].specifications = updatedVariants[
+      variantIndex
+    ].specifications.filter((_, i) => i !== specIndex);
+    setFormData((prev) => ({ ...prev, variants: updatedVariants }));
+  };
+
+  const addVariant = () =>
     setFormData((prev) => ({
       ...prev,
       variants: [
         ...prev.variants,
         {
           sku: "",
-          price: 0,
+          price: "",
+          mrp: "",
           stockQuantity: 0,
+          dimensions: {
+            weight: "",
+            length: "",
+            width: "",
+            height: "",
+            unit: "cm",
+          },
           attributes: { color: "", size: "", model: "" },
           images: [],
           specifications: [],
@@ -248,13 +265,14 @@ function ProductEdit() {
         },
       ],
     }));
-  };
 
-  const removeVariant = (index) => {
-    const updated = formData.variants.filter((_, i) => i !== index);
-    setFormData((prev) => ({ ...prev, variants: updated }));
-  };
+  const removeVariant = (index) =>
+    setFormData((prev) => ({
+      ...prev,
+      variants: prev.variants.filter((_, i) => i !== index),
+    }));
 
+  /* ===== IMAGE HANDLERS ===== */
   const handleImageUpload = (files) => {
     const validTypes = [
       "image/jpeg",
@@ -304,6 +322,7 @@ function ProductEdit() {
     setDragOver(false);
   };
 
+  // Existing image remove — public_id ko imagesToDelete mein daalo
   const handleDeleteExistingImage = (image) => {
     setFormData((prev) => ({
       ...prev,
@@ -314,6 +333,7 @@ function ProductEdit() {
     }));
   };
 
+  // New image preview remove
   const handleRemoveNewImage = (index) => {
     URL.revokeObjectURL(imagePreviews[index]);
     setFormData((prev) => ({
@@ -323,44 +343,51 @@ function ProductEdit() {
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
+  /* ===== SUBMIT ===== */
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
 
+    /* ===== CLIENT SIDE VALIDATION ===== */
+    if (
+      !formData.name ||
+      !formData.productKey ||
+      !formData.description ||
+      !formData.category ||
+      !formData.warranty ||
+      !formData.returnPolicy
+    ) {
+      setError("Please fill all required fields");
+      return;
+    }
+
+    if (
+      formData.mrp &&
+      formData.sellingPrice &&
+      parseFloat(formData.sellingPrice) > parseFloat(formData.mrp)
+    ) {
+      setError("Selling price cannot be higher than MRP");
+      return;
+    }
+
+    setSaving(true);
+
     try {
-      if (
-        !formData.name ||
-        !formData.productKey ||
-        !formData.description ||
-        !formData.category ||
-        !formData.warranty ||
-        !formData.returnPolicy
-      ) {
-        setError("Please fill all required fields");
-        return;
-      }
-
-      if (
-        formData.mrp &&
-        formData.sellingPrice &&
-        parseFloat(formData.sellingPrice) > parseFloat(formData.mrp)
-      ) {
-        setError("Selling price cannot be higher than MRP");
-        return;
-      }
-
-      setSaving(true);
-
+      /* ===== VARIANTS CLEAN + VALIDATE ===== */
       const cleanedVariants = formData.variants.filter(
         (v) =>
-          v.sku ||
-          v.attributes.color ||
-          v.attributes.size ||
-          v.price ||
-          v.stockQuantity,
+          (v.sku && v.sku.trim() !== "") ||
+          (v.price && parseFloat(v.price) > 0) ||
+          (v.attributes?.color && v.attributes.color.trim() !== "") ||
+          (v.attributes?.size && v.attributes.size.trim() !== "") ||
+          (v.attributes?.model && v.attributes.model.trim() !== "") ||
+          (v.stockQuantity && parseInt(v.stockQuantity) > 0),
       );
 
+      const isVariantProduct = cleanedVariants.length > 0;
+
+      /* ===== BUILD updateData ===== */
       const updateData = {
         name: formData.name,
         slug: formData.slug,
@@ -369,46 +396,82 @@ function ProductEdit() {
         category: formData.category,
         brand: formData.brand || undefined,
         modelNumber: formData.modelNumber || undefined,
-        mrp:
-          cleanedVariants.length === 0 && formData.mrp
-            ? parseFloat(formData.mrp)
-            : undefined,
-        sellingPrice:
-          cleanedVariants.length === 0 && formData.sellingPrice
-            ? parseFloat(formData.sellingPrice)
-            : undefined,
-        costPrice: formData.costPrice
-          ? parseFloat(formData.costPrice)
-          : undefined,
-        currency: formData.currency,
-        sku: cleanedVariants.length === 0 ? formData.sku : undefined,
-        stockQuantity: formData.stockQuantity
-          ? parseInt(formData.stockQuantity)
-          : 0,
-        stockStatus: formData.stockStatus,
-        lowStockThreshold: formData.lowStockThreshold
-          ? parseInt(formData.lowStockThreshold)
-          : 5,
-        allowBackorder: formData.allowBackorder,
-        reservedQuantity: formData.reservedQuantity
-          ? parseInt(formData.reservedQuantity)
-          : 0,
         specifications: formData.specifications.filter((s) => s.key || s.value),
         keyFeatures: formData.keyFeatures.filter((kf) => kf.key || kf.value),
-        variants: cleanedVariants.map((v) => ({
-          sku: v.sku,
-          price: v.price ? parseFloat(v.price) : 0,
-          stockQuantity: v.stockQuantity ? parseInt(v.stockQuantity) : 0,
-          attributes: {
-            color: v.attributes.color || undefined,
-            size: v.attributes.size || undefined,
-            model: v.attributes.model || undefined,
-          },
-          images: v.images || [],
-          specifications: v.specifications || [],
-          isActive: v.isActive !== undefined ? v.isActive : true,
-        })),
-        dimensions: {
+        warranty: formData.warranty,
+        returnPolicy: formData.returnPolicy,
+        isRecommended: !!formData.isRecommended,
+        isFeatured: !!formData.isFeatured,
+        isDigital: !!formData.isDigital,
+        status: formData.status,
+        metaTitle: formData.metaTitle || undefined,
+        metaDescription: formData.metaDescription || undefined,
+        keywords: formData.keywords.length > 0 ? formData.keywords : undefined,
+        tags: formData.tags.length > 0 ? formData.tags : undefined,
+
+        // Images — backend ke liye teen alag fields
+        imagesToDelete: formData.imagesToDelete, // public_ids (JSON array)
+        newImageFiles: formData.newImageFiles, // File objects (FormData mein jayenge)
+      };
+
+      if (isVariantProduct) {
+        updateData.variants = cleanedVariants.map((v) => {
+          const base = formData.productKey || formData.slug;
+          const colorPart = v.attributes?.color || "NA";
+          const sizePart = v.attributes?.size || "NA";
+
+          const variantSku =
+            v.sku && v.sku.trim() !== ""
+              ? v.sku
+              : `${base}-${colorPart}-${sizePart}-${Date.now()}`;
+
+          const variantPrice =
+            v.price && parseFloat(v.price) > 0 ? parseFloat(v.price) : 0;
+
+          return {
+            sku: variantSku,
+            price: variantPrice,
+            mrp: v.mrp && parseFloat(v.mrp) > 0 ? parseFloat(v.mrp) : undefined,
+            stockQuantity: v.stockQuantity ? parseInt(v.stockQuantity) : 0,
+            currency: "INR",
+            dimensions: {
+              weight: v.dimensions?.weight
+                ? parseFloat(v.dimensions.weight)
+                : undefined,
+              length: v.dimensions?.length
+                ? parseFloat(v.dimensions.length)
+                : undefined,
+              width: v.dimensions?.width
+                ? parseFloat(v.dimensions.width)
+                : undefined,
+              height: v.dimensions?.height
+                ? parseFloat(v.dimensions.height)
+                : undefined,
+              unit: v.dimensions?.unit || "cm",
+            },
+            attributes: {
+              color: v.attributes?.color || undefined,
+              size: v.attributes?.size || undefined,
+              model: v.attributes?.model || undefined,
+            },
+            images: v.images || [],
+            specifications:
+              v.specifications?.filter((s) => s.key || s.value) || [],
+            isActive: v.isActive !== undefined ? v.isActive : true,
+          };
+        });
+      } else {
+        // Non-variant product fields
+        updateData.sku =
+          formData.sku || `${formData.productKey}-main-${Date.now()}`;
+        updateData.sellingPrice = formData.sellingPrice
+          ? parseFloat(formData.sellingPrice)
+          : undefined;
+        updateData.mrp = formData.mrp ? parseFloat(formData.mrp) : undefined;
+        updateData.stockQuantity = formData.stockQuantity
+          ? parseInt(formData.stockQuantity)
+          : 0;
+        updateData.dimensions = {
           weight: formData.dimensions.weight
             ? parseFloat(formData.dimensions.weight)
             : undefined,
@@ -422,39 +485,18 @@ function ProductEdit() {
             ? parseFloat(formData.dimensions.height)
             : undefined,
           unit: formData.dimensions.unit || "cm",
-        },
-        warranty: formData.warranty,
-        returnPolicy: formData.returnPolicy,
-        isRecommended: !!formData.isRecommended,
-        isFeatured: !!formData.isFeatured,
-        isDigital: !!formData.isDigital,
-        status: formData.status,
-        metaTitle: formData.metaTitle || undefined,
-        metaDescription: formData.metaDescription || undefined,
-        keywords: formData.keywords.length > 0 ? formData.keywords : undefined,
-        tags: formData.tags.length > 0 ? formData.tags : undefined,
-        relatedProducts:
-          formData.relatedProducts.length > 0
-            ? formData.relatedProducts
-            : undefined,
-      };
-
-      // Handle images if needed
-      if (
-        formData.newImageFiles.length > 0 ||
-        formData.imagesToDelete.length > 0
-      ) {
-        updateData.imagesToDelete = formData.imagesToDelete;
-        updateData.images = formData.newImageFiles;
+        };
       }
 
-      console.log("Updating product:", updateData);
+      /* ===== API CALL ===== */
+      // productService.updateProduct internally banayega FormData:
+      //   - simpleFields   → formData.append(key, value)
+      //   - jsonFields     → formData.append(key, JSON.stringify(value))
+      //   - newImageFiles  → formData.append("images", file) for each
       await productService.updateProduct(id, updateData);
 
       setSuccess("Product updated successfully!");
-      setTimeout(() => {
-        navigate(`/admin/products/details/${id}`);
-      }, 1500);
+      setTimeout(() => navigate(`/admin/products/details/${id}`), 1500);
     } catch (err) {
       console.error("Error updating product:", err);
       setError(
@@ -467,6 +509,7 @@ function ProductEdit() {
     }
   };
 
+  /* ===== DELETE ===== */
   const handleDeleteProduct = async () => {
     if (
       window.confirm(
@@ -483,6 +526,7 @@ function ProductEdit() {
     }
   };
 
+  /* ===== LOADING STATE ===== */
   if (loading) {
     return (
       <div
@@ -508,12 +552,12 @@ function ProductEdit() {
               width: "40px",
               height: "40px",
               border: "4px solid #f3f4f6",
-              borderTop: "4px solid #3b82f6",
+              borderTop: "4px solid #667eea",
               borderRadius: "50%",
               animation: "spin 1s linear infinite",
               margin: "0 auto 16px",
             }}
-          ></div>
+          />
           <div
             style={{ fontSize: "16px", fontWeight: "500", color: "#111827" }}
           >
@@ -524,6 +568,7 @@ function ProductEdit() {
     );
   }
 
+  /* ===== RENDER ===== */
   return (
     <div
       style={{
@@ -550,21 +595,21 @@ function ProductEdit() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            backgroundColor: "#fff",
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
           }}
         >
           <div>
             <h1
               style={{
-                fontSize: "24px",
-                fontWeight: "600",
+                fontSize: "28px",
+                fontWeight: "700",
                 margin: "0 0 4px 0",
-                color: "#111827",
+                color: "#fff",
               }}
             >
               Edit Product
             </h1>
-            <p style={{ fontSize: "14px", color: "#6b7280", margin: 0 }}>
+            <p style={{ fontSize: "14px", color: "#e0e7ff", margin: 0 }}>
               Update product information and images
             </p>
           </div>
@@ -574,18 +619,17 @@ function ProductEdit() {
               display: "flex",
               alignItems: "center",
               gap: "8px",
-              padding: "10px 16px",
-              backgroundColor: "#f3f4f6",
-              color: "#374151",
+              padding: "10px 20px",
+              backgroundColor: "rgba(255,255,255,0.2)",
+              color: "#fff",
               borderRadius: "8px",
               textDecoration: "none",
               fontSize: "14px",
               fontWeight: "500",
-              border: "1px solid #e5e7eb",
+              border: "1px solid rgba(255,255,255,0.3)",
             }}
           >
-            <MdArrowBack size={16} />
-            Back to Details
+            <MdArrowBack size={18} /> Back to Details
           </Link>
         </div>
 
@@ -597,15 +641,18 @@ function ProductEdit() {
               backgroundColor: "#fef2f2",
               border: "1px solid #fecaca",
               color: "#dc2626",
-              padding: "12px 16px",
+              padding: "14px 18px",
               borderRadius: "8px",
               fontSize: "14px",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
             }}
           >
+            <span style={{ fontSize: "18px" }}>⚠️</span>
             {error}
           </div>
         )}
-
         {success && (
           <div
             style={{
@@ -613,16 +660,21 @@ function ProductEdit() {
               backgroundColor: "#f0fdf4",
               border: "1px solid #bbf7d0",
               color: "#166534",
-              padding: "12px 16px",
+              padding: "14px 18px",
               borderRadius: "8px",
               fontSize: "14px",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
             }}
           >
+            <span style={{ fontSize: "18px" }}>✓</span>
             {success}
           </div>
         )}
 
         <form onSubmit={handleSubmit} style={{ position: "relative" }}>
+          {/* Saving Overlay */}
           {saving && (
             <div
               style={{
@@ -631,52 +683,62 @@ function ProductEdit() {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                backgroundColor: "rgba(0, 0, 0, 0.3)",
+                backgroundColor: "rgba(0,0,0,0.5)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 zIndex: 9999,
+                backdropFilter: "blur(4px)",
               }}
             >
               <div
                 style={{
-                  padding: "32px",
+                  padding: "40px",
                   backgroundColor: "white",
-                  borderRadius: "12px",
-                  boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
+                  borderRadius: "16px",
+                  boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
                   textAlign: "center",
                 }}
               >
                 <div
                   style={{
-                    width: "40px",
-                    height: "40px",
-                    border: "4px solid #f3f4f6",
-                    borderTop: "4px solid #3b82f6",
+                    width: "50px",
+                    height: "50px",
+                    border: "5px solid #f3f4f6",
+                    borderTop: "5px solid #667eea",
                     borderRadius: "50%",
                     animation: "spin 1s linear infinite",
-                    margin: "0 auto 16px",
+                    margin: "0 auto 20px",
                   }}
-                ></div>
+                />
                 <div
                   style={{
-                    fontSize: "16px",
-                    fontWeight: "500",
+                    fontSize: "18px",
+                    fontWeight: "600",
                     color: "#111827",
                   }}
                 >
                   Updating product...
+                </div>
+                <div
+                  style={{
+                    fontSize: "14px",
+                    color: "#6b7280",
+                    marginTop: "8px",
+                  }}
+                >
+                  Please wait while we save your changes
                 </div>
               </div>
             </div>
           )}
 
           <div style={{ padding: "32px" }}>
-            {/* Product Images */}
-            <div style={{ marginBottom: "32px" }}>
+            {/* ===== PRODUCT IMAGES ===== */}
+            <div style={{ marginBottom: "40px" }}>
               <h3
                 style={{
-                  fontSize: "16px",
+                  fontSize: "18px",
                   fontWeight: "600",
                   marginBottom: "16px",
                   color: "#111827",
@@ -703,7 +765,7 @@ function ProductEdit() {
                     style={{
                       display: "grid",
                       gridTemplateColumns:
-                        "repeat(auto-fill, minmax(120px, 1fr))",
+                        "repeat(auto-fill, minmax(140px, 1fr))",
                       gap: "16px",
                     }}
                   >
@@ -712,9 +774,10 @@ function ProductEdit() {
                         key={image.public_id}
                         style={{
                           position: "relative",
-                          borderRadius: "8px",
+                          borderRadius: "10px",
                           overflow: "hidden",
-                          border: "1px solid #e5e7eb",
+                          border: "2px solid #e5e7eb",
+                          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
                         }}
                       >
                         <img
@@ -722,7 +785,7 @@ function ProductEdit() {
                           alt="Product"
                           style={{
                             width: "100%",
-                            height: "120px",
+                            height: "140px",
                             objectFit: "cover",
                           }}
                         />
@@ -737,13 +800,14 @@ function ProductEdit() {
                             color: "white",
                             border: "none",
                             borderRadius: "50%",
-                            width: "24px",
-                            height: "24px",
+                            width: "28px",
+                            height: "28px",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             cursor: "pointer",
-                            fontSize: "16px",
+                            fontSize: "18px",
+                            boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
                           }}
                         >
                           <MdClose />
@@ -754,7 +818,7 @@ function ProductEdit() {
                 </div>
               )}
 
-              {/* New Images Preview */}
+              {/* New Image Previews */}
               {imagePreviews.length > 0 && (
                 <div style={{ marginBottom: "24px" }}>
                   <label
@@ -772,7 +836,7 @@ function ProductEdit() {
                     style={{
                       display: "grid",
                       gridTemplateColumns:
-                        "repeat(auto-fill, minmax(120px, 1fr))",
+                        "repeat(auto-fill, minmax(140px, 1fr))",
                       gap: "16px",
                     }}
                   >
@@ -781,9 +845,10 @@ function ProductEdit() {
                         key={index}
                         style={{
                           position: "relative",
-                          borderRadius: "8px",
+                          borderRadius: "10px",
                           overflow: "hidden",
-                          border: "1px solid #e5e7eb",
+                          border: "2px solid #e5e7eb",
+                          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
                         }}
                       >
                         <img
@@ -791,7 +856,7 @@ function ProductEdit() {
                           alt="Preview"
                           style={{
                             width: "100%",
-                            height: "120px",
+                            height: "140px",
                             objectFit: "cover",
                           }}
                         />
@@ -806,13 +871,14 @@ function ProductEdit() {
                             color: "white",
                             border: "none",
                             borderRadius: "50%",
-                            width: "24px",
-                            height: "24px",
+                            width: "28px",
+                            height: "28px",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             cursor: "pointer",
-                            fontSize: "16px",
+                            fontSize: "18px",
+                            boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
                           }}
                         >
                           <MdClose />
@@ -831,37 +897,66 @@ function ProductEdit() {
                 onDragLeave={handleDragLeave}
                 style={{
                   border: dragOver
-                    ? "2px dashed #3b82f6"
+                    ? "2px dashed #667eea"
                     : "2px dashed #d1d5db",
                   borderRadius: "12px",
-                  padding: "32px",
+                  padding: "48px",
                   textAlign: "center",
                   cursor: "pointer",
-                  backgroundColor: dragOver ? "#eff6ff" : "#fafafa",
-                  transition: "all 0.2s",
+                  backgroundColor: dragOver ? "#f5f3ff" : "#fafafa",
+                  transition: "all 0.3s ease",
                 }}
               >
-                <MdCloudUpload
-                  size={36}
-                  style={{ color: "#9ca3af", marginBottom: "12px" }}
-                />
                 <div
                   style={{
-                    fontSize: "14px",
-                    color: "#374151",
-                    marginBottom: "8px",
-                    fontWeight: "500",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
                   }}
                 >
-                  Add more images
-                </div>
-                <div style={{ fontSize: "13px", color: "#6b7280" }}>
-                  {formData.existingImages.length +
-                    formData.newImageFiles.length}
-                  /5 images
+                  <MdCloudUpload
+                    size={56}
+                    style={{
+                      color: dragOver ? "#667eea" : "#9ca3af",
+                      marginBottom: "16px",
+                    }}
+                  />
+                  <div
+                    style={{
+                      fontSize: "15px",
+                      color: "#374151",
+                      marginBottom: "8px",
+                      fontWeight: "600",
+                    }}
+                  >
+                    {dragOver ? "Drop images here" : "Add more images"}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      color: "#6b7280",
+                      marginBottom: "12px",
+                    }}
+                  >
+                    or click to browse from your computer
+                  </div>
+                  <div
+                    style={{
+                      display: "inline-block",
+                      padding: "8px 16px",
+                      backgroundColor: "#667eea",
+                      color: "white",
+                      borderRadius: "6px",
+                      fontSize: "13px",
+                      fontWeight: "500",
+                    }}
+                  >
+                    {formData.existingImages.length +
+                      formData.newImageFiles.length}
+                    /5 images
+                  </div>
                 </div>
               </div>
-
               <input
                 id="file-input"
                 type="file"
@@ -872,644 +967,702 @@ function ProductEdit() {
               />
             </div>
 
-            {/* Name & Basic Info - Same as Create */}
-            <div style={{ marginBottom: "24px" }}>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "14px",
-                  fontWeight: "500",
-                  marginBottom: "8px",
-                  color: "#374151",
-                }}
-              >
-                Name*
-              </label>
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleInputChange}
-                required
-                disabled={saving}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  outline: "none",
-                }}
-                onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-              />
-            </div>
-
+            {/* ===== BASIC INFORMATION ===== */}
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "16px",
-                marginBottom: "24px",
+                marginBottom: "40px",
+                padding: "24px",
+                backgroundColor: "#f9fafb",
+                borderRadius: "12px",
+                border: "1px solid #e5e7eb",
               }}
             >
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  URL Slug*
-                </label>
-                <input
-                  type="text"
-                  name="slug"
-                  value={formData.slug}
-                  onChange={handleInputChange}
-                  required
-                  disabled={saving}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  SKU
-                </label>
-                <input
-                  type="text"
-                  name="sku"
-                  value={formData.sku}
-                  onChange={handleInputChange}
-                  disabled={saving}
-                  placeholder="Leave empty if using variants"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "16px",
-                marginBottom: "24px",
-              }}
-            >
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Brand
-                </label>
-                <input
-                  type="text"
-                  name="brand"
-                  value={formData.brand}
-                  onChange={handleInputChange}
-                  disabled={saving}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Category*
-                </label>
-                <select
-                  name="category"
-                  value={formData.category}
-                  onChange={handleInputChange}
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                    backgroundColor: "white",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                >
-                  <option value="">Select a category</option>
-                  {categories.map((cat) => (
-                    <option key={cat._id} value={cat._id}>
-                      {cat.pageTitle || cat.title || cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "16px",
-                marginBottom: "24px",
-              }}
-            >
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Model Number
-                </label>
-                <input
-                  type="text"
-                  name="modelNumber"
-                  value={formData.modelNumber}
-                  onChange={handleInputChange}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Product Key*
-                </label>
-                <input
-                  type="text"
-                  name="productKey"
-                  value={formData.productKey}
-                  onChange={handleInputChange}
-                  required
-                  disabled={saving}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "16px",
-                marginBottom: "24px",
-              }}
-            >
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Status
-                </label>
-                <select
-                  name="status"
-                  value={formData.status}
-                  onChange={handleInputChange}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                    backgroundColor: "white",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                >
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Stock Status
-                </label>
-                <select
-                  name="stockStatus"
-                  value={formData.stockStatus}
-                  onChange={handleInputChange}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                    backgroundColor: "white",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                >
-                  <option value="in-stock">In Stock</option>
-                  <option value="out-of-stock">Out of Stock</option>
-                  <option value="preorder">Pre-order</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Description */}
-            <div style={{ marginBottom: "24px" }}>
-              <label
+              <h3
                 style={{
-                  display: "block",
-                  fontSize: "14px",
-                  fontWeight: "500",
-                  marginBottom: "8px",
-                  color: "#374151",
+                  fontSize: "18px",
+                  fontWeight: "600",
+                  color: "#111827",
+                  marginBottom: "20px",
                 }}
               >
-                Description*
-              </label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                required
-                rows="6"
-                placeholder="Enter detailed product description..."
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  outline: "none",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                }}
-                onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-              />
+                Basic Information
+              </h3>
+              <div style={{ display: "grid", gap: "20px" }}>
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "14px",
+                      fontWeight: "500",
+                      marginBottom: "8px",
+                      color: "#374151",
+                    }}
+                  >
+                    Product Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    required
+                    disabled={saving}
+                    placeholder="e.g., Samsung Galaxy S24"
+                    style={{
+                      width: "100%",
+                      padding: "12px 14px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      outline: "none",
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = "#667eea";
+                      e.target.style.boxShadow =
+                        "0 0 0 3px rgba(102,126,234,0.1)";
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = "#d1d5db";
+                      e.target.style.boxShadow = "none";
+                    }}
+                  />
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "16px",
+                  }}
+                >
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        marginBottom: "8px",
+                        color: "#374151",
+                      }}
+                    >
+                      Product Key *
+                    </label>
+                    <input
+                      type="text"
+                      name="productKey"
+                      value={formData.productKey}
+                      onChange={handleInputChange}
+                      required
+                      disabled={saving}
+                      placeholder="e.g., SGS-2026"
+                      style={{
+                        width: "100%",
+                        padding: "12px 14px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        outline: "none",
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = "#667eea";
+                        e.target.style.boxShadow =
+                          "0 0 0 3px rgba(102,126,234,0.1)";
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = "#d1d5db";
+                        e.target.style.boxShadow = "none";
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        marginBottom: "8px",
+                        color: "#374151",
+                      }}
+                    >
+                      URL Slug *
+                    </label>
+                    <input
+                      type="text"
+                      name="slug"
+                      value={formData.slug}
+                      onChange={handleInputChange}
+                      required
+                      disabled={saving}
+                      placeholder="samsung-galaxy-s24"
+                      style={{
+                        width: "100%",
+                        padding: "12px 14px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        outline: "none",
+                        backgroundColor: "#f9fafb",
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = "#667eea";
+                        e.target.style.boxShadow =
+                          "0 0 0 3px rgba(102,126,234,0.1)";
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = "#d1d5db";
+                        e.target.style.boxShadow = "none";
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr 1fr",
+                    gap: "16px",
+                  }}
+                >
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        marginBottom: "8px",
+                        color: "#374151",
+                      }}
+                    >
+                      Brand
+                    </label>
+                    <input
+                      type="text"
+                      name="brand"
+                      value={formData.brand}
+                      onChange={handleInputChange}
+                      disabled={saving}
+                      placeholder="e.g., Samsung"
+                      style={{
+                        width: "100%",
+                        padding: "12px 14px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        outline: "none",
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = "#667eea";
+                        e.target.style.boxShadow =
+                          "0 0 0 3px rgba(102,126,234,0.1)";
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = "#d1d5db";
+                        e.target.style.boxShadow = "none";
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        marginBottom: "8px",
+                        color: "#374151",
+                      }}
+                    >
+                      Category *
+                    </label>
+                    <select
+                      name="category"
+                      value={formData.category}
+                      onChange={handleInputChange}
+                      required
+                      style={{
+                        width: "100%",
+                        padding: "12px 14px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        outline: "none",
+                        backgroundColor: "white",
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = "#667eea";
+                        e.target.style.boxShadow =
+                          "0 0 0 3px rgba(102,126,234,0.1)";
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = "#d1d5db";
+                        e.target.style.boxShadow = "none";
+                      }}
+                    >
+                      <option value="">Select Category</option>
+                      {categories.map((cat) => (
+                        <option key={cat._id} value={cat._id}>
+                          {cat.pageTitle || cat.title || cat.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        marginBottom: "8px",
+                        color: "#374151",
+                      }}
+                    >
+                      Model Number
+                    </label>
+                    <input
+                      type="text"
+                      name="modelNumber"
+                      value={formData.modelNumber}
+                      onChange={handleInputChange}
+                      placeholder="e.g., S24-128GB"
+                      style={{
+                        width: "100%",
+                        padding: "12px 14px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        outline: "none",
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = "#667eea";
+                        e.target.style.boxShadow =
+                          "0 0 0 3px rgba(102,126,234,0.1)";
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = "#d1d5db";
+                        e.target.style.boxShadow = "none";
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "14px",
+                      fontWeight: "500",
+                      marginBottom: "8px",
+                      color: "#374151",
+                    }}
+                  >
+                    Description *
+                  </label>
+                  <textarea
+                    name="description"
+                    value={formData.description}
+                    onChange={handleInputChange}
+                    required
+                    rows="5"
+                    placeholder="Enter detailed product description..."
+                    style={{
+                      width: "100%",
+                      padding: "12px 14px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      outline: "none",
+                      resize: "vertical",
+                      fontFamily: "inherit",
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = "#667eea";
+                      e.target.style.boxShadow =
+                        "0 0 0 3px rgba(102,126,234,0.1)";
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = "#d1d5db";
+                      e.target.style.boxShadow = "none";
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "14px",
+                      fontWeight: "500",
+                      marginBottom: "8px",
+                      color: "#374151",
+                    }}
+                  >
+                    Status
+                  </label>
+                  <select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleInputChange}
+                    style={{
+                      width: "100%",
+                      padding: "12px 14px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      outline: "none",
+                      backgroundColor: "white",
+                    }}
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
-            {/* Warranty & Return Policy */}
-            <div style={{ marginBottom: "24px" }}>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "14px",
-                  fontWeight: "500",
-                  marginBottom: "8px",
-                  color: "#374151",
-                }}
-              >
-                Warranty*
-              </label>
-              <textarea
-                name="warranty"
-                value={formData.warranty}
-                onChange={handleInputChange}
-                required
-                rows="3"
-                placeholder="e.g., 1 year manufacturer warranty"
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  outline: "none",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                  marginBottom: "16px",
-                }}
-                onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-              />
-
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "14px",
-                  fontWeight: "500",
-                  marginBottom: "8px",
-                  color: "#374151",
-                }}
-              >
-                Return Policy*
-              </label>
-              <textarea
-                name="returnPolicy"
-                value={formData.returnPolicy}
-                onChange={handleInputChange}
-                required
-                rows="3"
-                placeholder="e.g., 30 days return policy"
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  outline: "none",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                }}
-                onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-              />
-            </div>
-
-            {/* Specifications */}
-            <div style={{ marginBottom: "24px" }}>
+            {/* ===== SPECIFICATIONS ===== */}
+            <div
+              style={{
+                marginBottom: "40px",
+                padding: "24px",
+                backgroundColor: "#f9fafb",
+                borderRadius: "12px",
+                border: "1px solid #e5e7eb",
+              }}
+            >
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  marginBottom: "12px",
+                  marginBottom: "20px",
                 }}
               >
-                <label
+                <h3
                   style={{
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    color: "#374151",
+                    fontSize: "18px",
+                    fontWeight: "600",
+                    color: "#111827",
+                    margin: 0,
                   }}
                 >
-                  Specifications
-                </label>
+                  Technical Specifications
+                </h3>
                 <button
                   type="button"
                   onClick={addSpecification}
                   style={{
-                    padding: "6px 12px",
-                    backgroundColor: "#10b981",
+                    padding: "10px 18px",
+                    backgroundColor: "#667eea",
                     color: "white",
                     border: "none",
-                    borderRadius: "6px",
-                    fontSize: "13px",
+                    borderRadius: "8px",
+                    fontSize: "14px",
                     cursor: "pointer",
-                    fontWeight: "500",
+                    fontWeight: "600",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
                   }}
                 >
-                  + Add
+                  <MdAdd size={18} /> Add Specification
                 </button>
               </div>
-              {formData.specifications.map((spec, index) => (
+              {formData.specifications.length === 0 ? (
                 <div
-                  key={index}
-                  style={{ display: "flex", gap: "12px", marginBottom: "12px" }}
+                  style={{
+                    padding: "32px",
+                    textAlign: "center",
+                    border: "2px dashed #d1d5db",
+                    borderRadius: "8px",
+                    backgroundColor: "#fafafa",
+                  }}
                 >
-                  <input
-                    type="text"
-                    value={spec.key}
-                    onChange={(e) =>
-                      handleSpecificationChange(index, "key", e.target.value)
-                    }
-                    placeholder="Key"
+                  <p style={{ color: "#6b7280", margin: 0, fontSize: "14px" }}>
+                    No specifications added yet. Click "Add Specification" to
+                    start.
+                  </p>
+                </div>
+              ) : (
+                formData.specifications.map((spec, index) => (
+                  <div
+                    key={index}
                     style={{
-                      flex: 1,
-                      padding: "10px 12px",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      outline: "none",
-                    }}
-                  />
-                  <input
-                    type="text"
-                    value={spec.value}
-                    onChange={(e) =>
-                      handleSpecificationChange(index, "value", e.target.value)
-                    }
-                    placeholder="Value"
-                    style={{
-                      flex: 1,
-                      padding: "10px 12px",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      outline: "none",
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeSpecification(index)}
-                    style={{
-                      padding: "10px 16px",
-                      backgroundColor: "#ef4444",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      fontSize: "13px",
-                      cursor: "pointer",
-                      fontWeight: "500",
+                      display: "flex",
+                      gap: "12px",
+                      marginBottom: "12px",
                     }}
                   >
-                    Remove
-                  </button>
-                </div>
-              ))}
+                    <input
+                      type="text"
+                      value={spec.key}
+                      onChange={(e) =>
+                        handleSpecificationChange(index, "key", e.target.value)
+                      }
+                      placeholder="Key (e.g., Display)"
+                      style={{
+                        flex: 1,
+                        padding: "12px 14px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        outline: "none",
+                        backgroundColor: "white",
+                      }}
+                    />
+                    <input
+                      type="text"
+                      value={spec.value}
+                      onChange={(e) =>
+                        handleSpecificationChange(
+                          index,
+                          "value",
+                          e.target.value,
+                        )
+                      }
+                      placeholder="Value (e.g., 6.2 inch AMOLED)"
+                      style={{
+                        flex: 1,
+                        padding: "12px 14px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        outline: "none",
+                        backgroundColor: "white",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeSpecification(index)}
+                      style={{
+                        padding: "12px 18px",
+                        backgroundColor: "#ef4444",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        cursor: "pointer",
+                        fontWeight: "600",
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
 
-            {/* Key Features */}
-            <div style={{ marginBottom: "32px" }}>
+            {/* ===== KEY FEATURES ===== */}
+            <div
+              style={{
+                marginBottom: "40px",
+                padding: "24px",
+                backgroundColor: "#f9fafb",
+                borderRadius: "12px",
+                border: "1px solid #e5e7eb",
+              }}
+            >
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  marginBottom: "12px",
+                  marginBottom: "20px",
                 }}
               >
-                <label
+                <h3
                   style={{
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    color: "#374151",
+                    fontSize: "18px",
+                    fontWeight: "600",
+                    color: "#111827",
+                    margin: 0,
                   }}
                 >
                   Key Features
-                </label>
+                </h3>
                 <button
                   type="button"
                   onClick={addKeyFeature}
                   style={{
-                    padding: "6px 12px",
-                    backgroundColor: "#10b981",
+                    padding: "10px 18px",
+                    backgroundColor: "#667eea",
                     color: "white",
                     border: "none",
-                    borderRadius: "6px",
-                    fontSize: "13px",
+                    borderRadius: "8px",
+                    fontSize: "14px",
                     cursor: "pointer",
-                    fontWeight: "500",
+                    fontWeight: "600",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
                   }}
                 >
-                  + Add
+                  <MdAdd size={18} /> Add Feature
                 </button>
               </div>
-              {formData.keyFeatures.map((feature, index) => (
+              {formData.keyFeatures.length === 0 ? (
                 <div
-                  key={index}
-                  style={{ display: "flex", gap: "12px", marginBottom: "12px" }}
-                >
-                  <input
-                    type="text"
-                    value={feature.key}
-                    onChange={(e) =>
-                      handleKeyFeatureChange(index, "key", e.target.value)
-                    }
-                    placeholder="Feature name"
-                    style={{
-                      flex: 1,
-                      padding: "10px 12px",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      outline: "none",
-                    }}
-                  />
-                  <input
-                    type="text"
-                    value={feature.value}
-                    onChange={(e) =>
-                      handleKeyFeatureChange(index, "value", e.target.value)
-                    }
-                    placeholder="Feature description"
-                    style={{
-                      flex: 1,
-                      padding: "10px 12px",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      outline: "none",
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeKeyFeature(index)}
-                    style={{
-                      padding: "10px 16px",
-                      backgroundColor: "#ef4444",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      fontSize: "13px",
-                      cursor: "pointer",
-                      fontWeight: "500",
-                    }}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* Variants */}
-            {formData.variants.length > 0 && (
-              <div style={{ marginBottom: "32px" }}>
-                <h3
                   style={{
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    marginBottom: "16px",
-                    color: "#111827",
+                    padding: "32px",
+                    textAlign: "center",
+                    border: "2px dashed #d1d5db",
+                    borderRadius: "8px",
+                    backgroundColor: "#fafafa",
                   }}
                 >
-                  Variants
-                </h3>
-                {formData.variants.map((variant, index) => (
+                  <p style={{ color: "#6b7280", margin: 0, fontSize: "14px" }}>
+                    No key features added yet. Click "Add Feature" to start.
+                  </p>
+                </div>
+              ) : (
+                formData.keyFeatures.map((feature, index) => (
                   <div
                     key={index}
                     style={{
-                      padding: "20px",
+                      display: "flex",
+                      gap: "12px",
+                      marginBottom: "12px",
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={feature.key}
+                      onChange={(e) =>
+                        handleKeyFeatureChange(index, "key", e.target.value)
+                      }
+                      placeholder="Feature name (e.g., Camera)"
+                      style={{
+                        flex: 1,
+                        padding: "12px 14px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        outline: "none",
+                        backgroundColor: "white",
+                      }}
+                    />
+                    <input
+                      type="text"
+                      value={feature.value}
+                      onChange={(e) =>
+                        handleKeyFeatureChange(index, "value", e.target.value)
+                      }
+                      placeholder="Feature description (e.g., 50MP Triple Camera)"
+                      style={{
+                        flex: 1,
+                        padding: "12px 14px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        outline: "none",
+                        backgroundColor: "white",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeKeyFeature(index)}
+                      style={{
+                        padding: "12px 18px",
+                        backgroundColor: "#ef4444",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        cursor: "pointer",
+                        fontWeight: "600",
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* ===== PRODUCT VARIANTS ===== */}
+            <div
+              style={{
+                marginBottom: "40px",
+                padding: "24px",
+                backgroundColor: "#f9fafb",
+                borderRadius: "12px",
+                border: "1px solid #e5e7eb",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "20px",
+                }}
+              >
+                <h3
+                  style={{
+                    fontSize: "18px",
+                    fontWeight: "600",
+                    color: "#111827",
+                    margin: 0,
+                  }}
+                >
+                  Product Variants
+                  {formData.variants.length > 0 && (
+                    <span
+                      style={{
+                        marginLeft: "8px",
+                        fontSize: "14px",
+                        color: "#667eea",
+                        fontWeight: "500",
+                      }}
+                    >
+                      ({formData.variants.length})
+                    </span>
+                  )}
+                </h3>
+                <button
+                  type="button"
+                  onClick={addVariant}
+                  style={{
+                    padding: "10px 18px",
+                    backgroundColor: "#667eea",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    cursor: "pointer",
+                    fontWeight: "600",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <MdAdd size={18} /> Add Variant
+                </button>
+              </div>
+
+              {formData.variants.length === 0 ? (
+                <div
+                  style={{
+                    padding: "32px",
+                    textAlign: "center",
+                    border: "2px dashed #d1d5db",
+                    borderRadius: "8px",
+                    backgroundColor: "#fafafa",
+                  }}
+                >
+                  <p style={{ color: "#6b7280", margin: 0, fontSize: "14px" }}>
+                    No variants added. Click "Add Variant" to create product
+                    variations.
+                  </p>
+                </div>
+              ) : (
+                formData.variants.map((variant, variantIndex) => (
+                  <div
+                    key={variantIndex}
+                    style={{
+                      padding: "24px",
                       border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
-                      marginBottom: "16px",
-                      backgroundColor: "#fafafa",
+                      borderRadius: "12px",
+                      marginBottom: "20px",
+                      backgroundColor: "white",
                     }}
                   >
                     <div
@@ -1517,148 +1670,106 @@ function ProductEdit() {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        marginBottom: "16px",
+                        marginBottom: "20px",
+                        paddingBottom: "12px",
+                        borderBottom: "2px solid #f3f4f6",
                       }}
                     >
                       <h4
                         style={{
-                          fontSize: "14px",
+                          fontSize: "16px",
                           fontWeight: "600",
                           color: "#111827",
+                          margin: 0,
                         }}
                       >
-                        Variant {index + 1}
+                        Variant #{variantIndex + 1}
                       </h4>
                       <button
                         type="button"
-                        onClick={() => removeVariant(index)}
+                        onClick={() => removeVariant(variantIndex)}
                         style={{
-                          padding: "6px 12px",
+                          padding: "8px 16px",
                           backgroundColor: "#ef4444",
                           color: "white",
                           border: "none",
                           borderRadius: "6px",
                           fontSize: "13px",
                           cursor: "pointer",
-                          fontWeight: "500",
+                          fontWeight: "600",
                         }}
                       >
-                        Remove
+                        Remove Variant
                       </button>
                     </div>
+
+                    {/* Attributes */}
                     <div
                       style={{
                         display: "grid",
                         gridTemplateColumns: "1fr 1fr 1fr",
-                        gap: "12px",
+                        gap: "16px",
+                        marginBottom: "16px",
                       }}
                     >
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: "500",
-                            marginBottom: "6px",
-                            color: "#374151",
-                          }}
-                        >
-                          Color
-                        </label>
-                        <input
-                          type="text"
-                          value={variant.attributes.color}
-                          onChange={(e) =>
-                            handleVariantChange(
-                              index,
-                              "attributes.color",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="Red, Blue"
-                          style={{
-                            width: "100%",
-                            padding: "8px 10px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "6px",
-                            fontSize: "14px",
-                            outline: "none",
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: "500",
-                            marginBottom: "6px",
-                            color: "#374151",
-                          }}
-                        >
-                          Size
-                        </label>
-                        <input
-                          type="text"
-                          value={variant.attributes.size}
-                          onChange={(e) =>
-                            handleVariantChange(
-                              index,
-                              "attributes.size",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="S, M, L"
-                          style={{
-                            width: "100%",
-                            padding: "8px 10px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "6px",
-                            fontSize: "14px",
-                            outline: "none",
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: "500",
-                            marginBottom: "6px",
-                            color: "#374151",
-                          }}
-                        >
-                          Model
-                        </label>
-                        <input
-                          type="text"
-                          value={variant.attributes.model}
-                          onChange={(e) =>
-                            handleVariantChange(
-                              index,
-                              "attributes.model",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="Pro, Basic"
-                          style={{
-                            width: "100%",
-                            padding: "8px 10px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "6px",
-                            fontSize: "14px",
-                            outline: "none",
-                          }}
-                        />
-                      </div>
+                      {[
+                        ["Color", "attributes.color", "Black, Blue, Red"],
+                        [
+                          "Size/Storage",
+                          "attributes.size",
+                          "128GB, 256GB, S, M, L",
+                        ],
+                        ["Model", "attributes.model", "S24, Pro, Basic"],
+                      ].map(([label, field, placeholder]) => (
+                        <div key={field}>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: "13px",
+                              fontWeight: "500",
+                              marginBottom: "6px",
+                              color: "#374151",
+                            }}
+                          >
+                            {label}
+                          </label>
+                          <input
+                            type="text"
+                            value={
+                              field === "attributes.color"
+                                ? variant.attributes?.color || ""
+                                : field === "attributes.size"
+                                  ? variant.attributes?.size || ""
+                                  : variant.attributes?.model || ""
+                            }
+                            onChange={(e) =>
+                              handleVariantChange(
+                                variantIndex,
+                                field,
+                                e.target.value,
+                              )
+                            }
+                            placeholder={placeholder}
+                            style={{
+                              width: "100%",
+                              padding: "10px 12px",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "6px",
+                              fontSize: "14px",
+                              outline: "none",
+                            }}
+                          />
+                        </div>
+                      ))}
                     </div>
+
+                    {/* SKU, Pricing, Stock */}
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "1fr 1fr 1fr",
-                        gap: "12px",
-                        marginTop: "12px",
+                        gridTemplateColumns: "1fr 1fr 1fr 1fr",
+                        gap: "16px",
+                        marginBottom: "16px",
                       }}
                     >
                       <div>
@@ -1677,12 +1788,16 @@ function ProductEdit() {
                           type="text"
                           value={variant.sku}
                           onChange={(e) =>
-                            handleVariantChange(index, "sku", e.target.value)
+                            handleVariantChange(
+                              variantIndex,
+                              "sku",
+                              e.target.value,
+                            )
                           }
-                          placeholder="Variant SKU"
+                          placeholder="SGS24-230-BLACK"
                           style={{
                             width: "100%",
-                            padding: "8px 10px",
+                            padding: "10px 12px",
                             border: "1px solid #d1d5db",
                             borderRadius: "6px",
                             fontSize: "14px",
@@ -1700,19 +1815,57 @@ function ProductEdit() {
                             color: "#374151",
                           }}
                         >
-                          Price
+                          MRP (₹)
+                        </label>
+                        <input
+                          type="number"
+                          value={variant.mrp}
+                          onChange={(e) =>
+                            handleVariantChange(
+                              variantIndex,
+                              "mrp",
+                              e.target.value,
+                            )
+                          }
+                          placeholder="79999"
+                          step="0.01"
+                          style={{
+                            width: "100%",
+                            padding: "10px 12px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            outline: "none",
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "13px",
+                            fontWeight: "500",
+                            marginBottom: "6px",
+                            color: "#374151",
+                          }}
+                        >
+                          Selling Price (₹) *
                         </label>
                         <input
                           type="number"
                           value={variant.price}
                           onChange={(e) =>
-                            handleVariantChange(index, "price", e.target.value)
+                            handleVariantChange(
+                              variantIndex,
+                              "price",
+                              e.target.value,
+                            )
                           }
-                          placeholder="0.00"
+                          placeholder="74999"
                           step="0.01"
                           style={{
                             width: "100%",
-                            padding: "8px 10px",
+                            padding: "10px 12px",
                             border: "1px solid #d1d5db",
                             borderRadius: "6px",
                             fontSize: "14px",
@@ -1730,14 +1883,14 @@ function ProductEdit() {
                             color: "#374151",
                           }}
                         >
-                          Stock
+                          Stock Qty
                         </label>
                         <input
                           type="number"
                           value={variant.stockQuantity}
                           onChange={(e) =>
                             handleVariantChange(
-                              index,
+                              variantIndex,
                               "stockQuantity",
                               e.target.value,
                             )
@@ -1745,7 +1898,7 @@ function ProductEdit() {
                           placeholder="0"
                           style={{
                             width: "100%",
-                            padding: "8px 10px",
+                            padding: "10px 12px",
                             border: "1px solid #d1d5db",
                             borderRadius: "6px",
                             fontSize: "14px",
@@ -1754,46 +1907,522 @@ function ProductEdit() {
                         />
                       </div>
                     </div>
+
+                    {/* Dimensions */}
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr 1fr 1fr",
+                        gap: "16px",
+                        marginBottom: "16px",
+                      }}
+                    >
+                      {[
+                        ["Weight (g)", "dimensions.weight", "168"],
+                        ["Length (cm)", "dimensions.length", "14.7"],
+                        ["Width (cm)", "dimensions.width", "7.0"],
+                        ["Height (cm)", "dimensions.height", "0.76"],
+                      ].map(([label, field, placeholder]) => (
+                        <div key={field}>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: "13px",
+                              fontWeight: "500",
+                              marginBottom: "6px",
+                              color: "#374151",
+                            }}
+                          >
+                            {label}
+                          </label>
+                          <input
+                            type="number"
+                            value={
+                              field === "dimensions.weight"
+                                ? variant.dimensions?.weight || ""
+                                : field === "dimensions.length"
+                                  ? variant.dimensions?.length || ""
+                                  : field === "dimensions.width"
+                                    ? variant.dimensions?.width || ""
+                                    : variant.dimensions?.height || ""
+                            }
+                            onChange={(e) =>
+                              handleVariantChange(
+                                variantIndex,
+                                field,
+                                e.target.value,
+                              )
+                            }
+                            placeholder={placeholder}
+                            step="0.01"
+                            style={{
+                              width: "100%",
+                              padding: "10px 12px",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "6px",
+                              fontSize: "14px",
+                              outline: "none",
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Variant Specifications */}
+                    <div style={{ marginTop: "16px" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: "12px",
+                        }}
+                      >
+                        <label
+                          style={{
+                            fontSize: "14px",
+                            fontWeight: "500",
+                            color: "#374151",
+                          }}
+                        >
+                          Variant-Specific Specifications
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => addVariantSpecification(variantIndex)}
+                          style={{
+                            padding: "6px 12px",
+                            backgroundColor: "#667eea",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            cursor: "pointer",
+                            fontWeight: "500",
+                          }}
+                        >
+                          + Add Spec
+                        </button>
+                      </div>
+                      {variant.specifications?.map((spec, specIndex) => (
+                        <div
+                          key={specIndex}
+                          style={{
+                            display: "flex",
+                            gap: "10px",
+                            marginBottom: "10px",
+                          }}
+                        >
+                          <input
+                            type="text"
+                            value={spec.key}
+                            onChange={(e) =>
+                              handleVariantSpecChange(
+                                variantIndex,
+                                specIndex,
+                                "key",
+                                e.target.value,
+                              )
+                            }
+                            placeholder="Key (e.g., RAM)"
+                            style={{
+                              flex: 1,
+                              padding: "8px 10px",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "6px",
+                              fontSize: "13px",
+                              outline: "none",
+                            }}
+                          />
+                          <input
+                            type="text"
+                            value={spec.value}
+                            onChange={(e) =>
+                              handleVariantSpecChange(
+                                variantIndex,
+                                specIndex,
+                                "value",
+                                e.target.value,
+                              )
+                            }
+                            placeholder="Value (e.g., 8GB)"
+                            style={{
+                              flex: 1,
+                              padding: "8px 10px",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "6px",
+                              fontSize: "13px",
+                              outline: "none",
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              removeVariantSpecification(
+                                variantIndex,
+                                specIndex,
+                              )
+                            }
+                            style={{
+                              padding: "8px 14px",
+                              backgroundColor: "#ef4444",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "6px",
+                              fontSize: "12px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* ===== NON-VARIANT PRICING (only if no variants) ===== */}
+            {formData.variants.length === 0 && (
+              <>
+                <div
+                  style={{
+                    marginBottom: "40px",
+                    padding: "24px",
+                    backgroundColor: "#f9fafb",
+                    borderRadius: "12px",
+                    border: "1px solid #e5e7eb",
+                  }}
+                >
+                  <h3
+                    style={{
+                      fontSize: "18px",
+                      fontWeight: "600",
+                      color: "#111827",
+                      marginBottom: "20px",
+                    }}
+                  >
+                    Pricing & Inventory
+                  </h3>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr 1fr 1fr",
+                      gap: "16px",
+                    }}
+                  >
+                    {[
+                      ["SKU", "sku", "text", "PROD-SKU-001"],
+                      ["MRP (₹)", "mrp", "number", "0.00"],
+                      ["Selling Price (₹) *", "sellingPrice", "number", "0.00"],
+                      ["Stock Quantity", "stockQuantity", "number", "0"],
+                    ].map(([label, name, type, placeholder]) => (
+                      <div key={name}>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "14px",
+                            fontWeight: "500",
+                            marginBottom: "8px",
+                            color: "#374151",
+                          }}
+                        >
+                          {label}
+                        </label>
+                        <input
+                          type={type}
+                          name={name}
+                          value={formData[name]}
+                          onChange={handleInputChange}
+                          placeholder={placeholder}
+                          step={type === "number" ? "0.01" : undefined}
+                          style={{
+                            width: "100%",
+                            padding: "12px 14px",
+                            border:
+                              name === "sellingPrice" && priceValidationMessage
+                                ? "1px solid #ef4444"
+                                : "1px solid #d1d5db",
+                            borderRadius: "8px",
+                            fontSize: "14px",
+                            outline: "none",
+                            backgroundColor: "white",
+                          }}
+                          onFocus={(e) => {
+                            e.target.style.borderColor = "#667eea";
+                            e.target.style.boxShadow =
+                              "0 0 0 3px rgba(102,126,234,0.1)";
+                          }}
+                          onBlur={(e) => {
+                            e.target.style.borderColor = "#d1d5db";
+                            e.target.style.boxShadow = "none";
+                          }}
+                        />
+                        {name === "sellingPrice" && priceValidationMessage && (
+                          <div
+                            style={{
+                              fontSize: "12px",
+                              color: "#ef4444",
+                              marginTop: "4px",
+                            }}
+                          >
+                            {priceValidationMessage}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    marginBottom: "40px",
+                    padding: "24px",
+                    backgroundColor: "#f9fafb",
+                    borderRadius: "12px",
+                    border: "1px solid #e5e7eb",
+                  }}
+                >
+                  <h3
+                    style={{
+                      fontSize: "18px",
+                      fontWeight: "600",
+                      color: "#111827",
+                      marginBottom: "20px",
+                    }}
+                  >
+                    Dimensions & Weight
+                  </h3>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr 1fr 1fr",
+                      gap: "16px",
+                    }}
+                  >
+                    {[
+                      ["Weight (g)", "dimensions.weight"],
+                      ["Length (cm)", "dimensions.length"],
+                      ["Width (cm)", "dimensions.width"],
+                      ["Height (cm)", "dimensions.height"],
+                    ].map(([label, name]) => (
+                      <div key={name}>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "14px",
+                            fontWeight: "500",
+                            marginBottom: "8px",
+                            color: "#374151",
+                          }}
+                        >
+                          {label}
+                        </label>
+                        <input
+                          type="number"
+                          name={name}
+                          value={
+                            name === "dimensions.weight"
+                              ? formData.dimensions.weight
+                              : name === "dimensions.length"
+                                ? formData.dimensions.length
+                                : name === "dimensions.width"
+                                  ? formData.dimensions.width
+                                  : formData.dimensions.height
+                          }
+                          onChange={handleInputChange}
+                          placeholder="0.00"
+                          step="0.01"
+                          style={{
+                            width: "100%",
+                            padding: "12px 14px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "8px",
+                            fontSize: "14px",
+                            outline: "none",
+                            backgroundColor: "white",
+                          }}
+                          onFocus={(e) => {
+                            e.target.style.borderColor = "#667eea";
+                            e.target.style.boxShadow =
+                              "0 0 0 3px rgba(102,126,234,0.1)";
+                          }}
+                          onBlur={(e) => {
+                            e.target.style.borderColor = "#d1d5db";
+                            e.target.style.boxShadow = "none";
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ===== WARRANTY & RETURN ===== */}
+            <div
+              style={{
+                marginBottom: "40px",
+                padding: "24px",
+                backgroundColor: "#f9fafb",
+                borderRadius: "12px",
+                border: "1px solid #e5e7eb",
+              }}
+            >
+              <h3
+                style={{
+                  fontSize: "18px",
+                  fontWeight: "600",
+                  color: "#111827",
+                  marginBottom: "20px",
+                }}
+              >
+                Warranty & Return Policy
+              </h3>
+              <div style={{ display: "grid", gap: "16px" }}>
+                {[
+                  [
+                    "warranty",
+                    "Warranty *",
+                    "e.g., 1 Year Manufacturer Warranty",
+                  ],
+                  [
+                    "returnPolicy",
+                    "Return Policy *",
+                    "e.g., 7 Days Replacement Policy",
+                  ],
+                ].map(([name, label, placeholder]) => (
+                  <div key={name}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        marginBottom: "8px",
+                        color: "#374151",
+                      }}
+                    >
+                      {label}
+                    </label>
+                    <textarea
+                      name={name}
+                      value={formData[name]}
+                      onChange={handleInputChange}
+                      required
+                      rows="3"
+                      placeholder={placeholder}
+                      style={{
+                        width: "100%",
+                        padding: "12px 14px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        outline: "none",
+                        resize: "vertical",
+                        fontFamily: "inherit",
+                        backgroundColor: "white",
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = "#667eea";
+                        e.target.style.boxShadow =
+                          "0 0 0 3px rgba(102,126,234,0.1)";
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = "#d1d5db";
+                        e.target.style.boxShadow = "none";
+                      }}
+                    />
                   </div>
                 ))}
               </div>
-            )}
+            </div>
 
-            <button
-              type="button"
-              onClick={addVariant}
+            {/* ===== SEO & MARKETING ===== */}
+            <div
               style={{
-                padding: "10px 20px",
-                backgroundColor: "#3b82f6",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                fontSize: "14px",
-                cursor: "pointer",
-                fontWeight: "500",
-                marginBottom: "32px",
+                marginBottom: "40px",
+                padding: "24px",
+                backgroundColor: "#f9fafb",
+                borderRadius: "12px",
+                border: "1px solid #e5e7eb",
               }}
             >
-              + Add Variant
-            </button>
-
-            {/* Pricing (if no variants) */}
-            {formData.variants.length === 0 && (
-              <div style={{ marginBottom: "32px" }}>
-                <h3
-                  style={{
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    marginBottom: "16px",
-                    color: "#111827",
-                  }}
-                >
-                  Pricing Details
-                </h3>
+              <h3
+                style={{
+                  fontSize: "18px",
+                  fontWeight: "600",
+                  color: "#111827",
+                  marginBottom: "20px",
+                }}
+              >
+                SEO & Marketing
+              </h3>
+              <div style={{ display: "grid", gap: "16px" }}>
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "14px",
+                      fontWeight: "500",
+                      marginBottom: "8px",
+                      color: "#374151",
+                    }}
+                  >
+                    Meta Title
+                  </label>
+                  <input
+                    type="text"
+                    name="metaTitle"
+                    value={formData.metaTitle}
+                    onChange={handleInputChange}
+                    placeholder="e.g., Samsung Galaxy S24 - Buy Online"
+                    style={{
+                      width: "100%",
+                      padding: "12px 14px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      outline: "none",
+                      backgroundColor: "white",
+                    }}
+                  />
+                </div>
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "14px",
+                      fontWeight: "500",
+                      marginBottom: "8px",
+                      color: "#374151",
+                    }}
+                  >
+                    Meta Description
+                  </label>
+                  <textarea
+                    name="metaDescription"
+                    value={formData.metaDescription}
+                    onChange={handleInputChange}
+                    rows="3"
+                    placeholder="e.g., Shop Samsung Galaxy S24 at best price in India"
+                    style={{
+                      width: "100%",
+                      padding: "12px 14px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      outline: "none",
+                      resize: "vertical",
+                      fontFamily: "inherit",
+                      backgroundColor: "white",
+                    }}
+                  />
+                </div>
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "1fr 1fr 1fr",
+                    gridTemplateColumns: "1fr 1fr",
                     gap: "16px",
                   }}
                 >
@@ -1807,76 +2436,31 @@ function ProductEdit() {
                         color: "#374151",
                       }}
                     >
-                      MRP (₹)
+                      Tags (comma-separated)
                     </label>
                     <input
-                      type="number"
-                      name="mrp"
-                      value={formData.mrp}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                      }}
-                      onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                      onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                    />
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        marginBottom: "8px",
-                        color: "#374151",
-                      }}
-                    >
-                      Selling Price (₹)
-                    </label>
-                    <input
-                      type="number"
-                      name="sellingPrice"
-                      value={formData.sellingPrice}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        border: priceValidationMessage
-                          ? "1px solid #ef4444"
-                          : "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                      }}
-                      onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                      onBlur={(e) =>
-                        (e.target.style.borderColor = priceValidationMessage
-                          ? "#ef4444"
-                          : "#d1d5db")
+                      type="text"
+                      value={formData.tags.join(", ")}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          tags: e.target.value
+                            .split(",")
+                            .map((t) => t.trim())
+                            .filter(Boolean),
+                        }))
                       }
+                      placeholder="mobile, android, 5g"
+                      style={{
+                        width: "100%",
+                        padding: "12px 14px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        outline: "none",
+                        backgroundColor: "white",
+                      }}
                     />
-                    {priceValidationMessage && (
-                      <div
-                        style={{
-                          fontSize: "13px",
-                          color: "#ef4444",
-                          marginTop: "4px",
-                        }}
-                      >
-                        {priceValidationMessage}
-                      </div>
-                    )}
                   </div>
                   <div>
                     <label
@@ -1888,345 +2472,93 @@ function ProductEdit() {
                         color: "#374151",
                       }}
                     >
-                      Cost Price (₹)
+                      SEO Keywords (comma-separated)
                     </label>
                     <input
-                      type="number"
-                      name="costPrice"
-                      value={formData.costPrice}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
+                      type="text"
+                      value={formData.keywords.join(", ")}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          keywords: e.target.value
+                            .split(",")
+                            .map((k) => k.trim())
+                            .filter(Boolean),
+                        }))
+                      }
+                      placeholder="samsung, galaxy, s24, smartphone"
                       style={{
                         width: "100%",
-                        padding: "10px 12px",
+                        padding: "12px 14px",
                         border: "1px solid #d1d5db",
                         borderRadius: "8px",
                         fontSize: "14px",
                         outline: "none",
+                        backgroundColor: "white",
                       }}
-                      onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                      onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
                     />
                   </div>
                 </div>
               </div>
-            )}
+            </div>
 
-            {/* Stock & Dimensions */}
+            {/* ===== PRODUCT SETTINGS ===== */}
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr 1fr",
-                gap: "16px",
-                marginBottom: "32px",
+                marginBottom: "40px",
+                padding: "24px",
+                backgroundColor: "#f9fafb",
+                borderRadius: "12px",
+                border: "1px solid #e5e7eb",
               }}
             >
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Stock Quantity
-                </label>
-                <input
-                  type="number"
-                  name="stockQuantity"
-                  value={formData.stockQuantity}
-                  onChange={handleInputChange}
-                  min="0"
-                  placeholder="0"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Weight (kg)
-                </label>
-                <input
-                  type="number"
-                  name="dimensions.weight"
-                  value={formData.dimensions.weight}
-                  onChange={handleInputChange}
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Length (cm)
-                </label>
-                <input
-                  type="number"
-                  name="dimensions.length"
-                  value={formData.dimensions.length}
-                  onChange={handleInputChange}
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Width (cm)
-                </label>
-                <input
-                  type="number"
-                  name="dimensions.width"
-                  value={formData.dimensions.width}
-                  onChange={handleInputChange}
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
+              <h3
+                style={{
+                  fontSize: "18px",
+                  fontWeight: "600",
+                  color: "#111827",
+                  marginBottom: "20px",
+                }}
+              >
+                Product Settings
+              </h3>
+              <div style={{ display: "flex", gap: "32px", flexWrap: "wrap" }}>
+                {[
+                  ["isRecommended", "⭐ Recommended Product"],
+                  ["isFeatured", "🔥 Featured Product"],
+                  ["isDigital", "💾 Digital Product"],
+                ].map(([name, label]) => (
+                  <label
+                    key={name}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      fontSize: "14px",
+                      color: "#374151",
+                      cursor: "pointer",
+                      fontWeight: "500",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      name={name}
+                      checked={formData[name]}
+                      onChange={handleInputChange}
+                      style={{
+                        width: "18px",
+                        height: "18px",
+                        cursor: "pointer",
+                        accentColor: "#667eea",
+                      }}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
               </div>
             </div>
 
-            {/* Tags & Keywords */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "16px",
-                marginBottom: "24px",
-              }}
-            >
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Tags (comma-separated)
-                </label>
-                <input
-                  type="text"
-                  name="tags"
-                  value={formData.tags.join(", ")}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      tags: e.target.value
-                        .split(",")
-                        .map((t) => t.trim())
-                        .filter(Boolean),
-                    }))
-                  }
-                  placeholder="electronics, smartphone, 5G"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  SEO Keywords (comma-separated)
-                </label>
-                <input
-                  type="text"
-                  name="keywords"
-                  value={formData.keywords.join(", ")}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      keywords: e.target.value
-                        .split(",")
-                        .map((k) => k.trim())
-                        .filter(Boolean),
-                    }))
-                  }
-                  placeholder="keyword1, keyword2"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-            </div>
-
-            {/* Checkboxes */}
-            <div
-              style={{
-                marginBottom: "32px",
-                display: "flex",
-                gap: "24px",
-                flexWrap: "wrap",
-              }}
-            >
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "14px",
-                  color: "#374151",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  name="isRecommended"
-                  checked={formData.isRecommended}
-                  onChange={handleInputChange}
-                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                />
-                Recommended Product
-              </label>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "14px",
-                  color: "#374151",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  name="isFeatured"
-                  checked={formData.isFeatured}
-                  onChange={handleInputChange}
-                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                />
-                Featured Product
-              </label>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "14px",
-                  color: "#374151",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  name="isDigital"
-                  checked={formData.isDigital}
-                  onChange={handleInputChange}
-                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                />
-                Digital Product
-              </label>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "14px",
-                  color: "#374151",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  name="allowBackorder"
-                  checked={formData.allowBackorder}
-                  onChange={handleInputChange}
-                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                />
-                Allow Backorder
-              </label>
-            </div>
-
-            {/* Danger Zone */}
+            {/* ===== DANGER ZONE ===== */}
             <div
               style={{
                 padding: "24px",
@@ -2273,72 +2605,74 @@ function ProductEdit() {
                   gap: "8px",
                 }}
               >
-                <MdDelete size={16} />
-                Delete Product
+                <MdDelete size={16} /> Delete Product
               </button>
             </div>
           </div>
 
-          {/* Footer Actions */}
+          {/* ===== FOOTER ACTIONS ===== */}
           <div
             style={{
-              padding: "20px 32px",
+              padding: "24px 32px",
               borderTop: "1px solid #e5e7eb",
               backgroundColor: "#fafafa",
               display: "flex",
-              justifyContent: "flex-end",
-              gap: "12px",
+              justifyContent: "space-between",
+              alignItems: "center",
             }}
           >
-            <Link
-              to={`/admin/products/details/${id}`}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "white",
-                color: "#374151",
-                border: "1px solid #d1d5db",
-                borderRadius: "8px",
-                textDecoration: "none",
-                fontSize: "14px",
-                fontWeight: "500",
-                display: "inline-flex",
-                alignItems: "center",
-              }}
-            >
-              Cancel
-            </Link>
-            <button
-              type="submit"
-              disabled={saving}
-              style={{
-                padding: "10px 24px",
-                backgroundColor: saving ? "#9ca3af" : "#3b82f6",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                fontSize: "14px",
-                fontWeight: "500",
-                cursor: saving ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-              }}
-            >
-              <MdSave size={16} />
-              {saving ? "Saving..." : "Save Changes"}
-            </button>
+            <div style={{ fontSize: "13px", color: "#6b7280" }}>
+              * Required fields must be filled
+            </div>
+            <div style={{ display: "flex", gap: "12px" }}>
+              <Link
+                to={`/admin/products/details/${id}`}
+                style={{
+                  padding: "12px 24px",
+                  backgroundColor: "white",
+                  color: "#374151",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "8px",
+                  textDecoration: "none",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  display: "inline-flex",
+                  alignItems: "center",
+                }}
+              >
+                Cancel
+              </Link>
+              <button
+                type="submit"
+                disabled={saving}
+                style={{
+                  padding: "12px 32px",
+                  background: saving
+                    ? "#9ca3af"
+                    : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  cursor: saving ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  boxShadow: saving
+                    ? "none"
+                    : "0 4px 6px rgba(102,126,234,0.3)",
+                }}
+              >
+                <MdSave size={18} />
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
           </div>
         </form>
       </div>
 
-      <style>
-        {`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}
-      </style>
+      <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

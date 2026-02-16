@@ -123,7 +123,7 @@ function ProductList() {
 
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
             <Link 
-              to="/admin/products/grid" 
+              to="/admin/products/grid" d
               style={{
                 display: 'flex',
                 alignItems: 'center',

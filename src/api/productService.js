@@ -8,81 +8,46 @@ export const productService = {
     try {
       const formData = new FormData();
 
-      const variants = productData.variants?.length ? productData.variants : [];
-      const isVariantProduct = variants.length > 0;
-
       /* ===== REQUIRED FIELDS ===== */
       const requiredFields = [
-        "name",
-        "productKey",
-        "description",
-        "category",
-        "warranty",
-        "returnPolicy"
+        "name", "productKey", "description",
+        "category", "warranty", "returnPolicy",
       ];
-
-      requiredFields.forEach(field => {
-        if (!productData[field]) {
-          throw { message: `${field} is required` };
-        }
+      requiredFields.forEach((field) => {
+        if (!productData[field]) throw { message: `${field} is required` };
         formData.append(field, productData[field]);
       });
 
-      /* ===== VARIANT / NON VARIANT RULE ===== */
-      if (isVariantProduct) {
-        formData.append("variants", JSON.stringify(variants));
-      } else {
-        if (!productData.sku) throw { message: "sku is required for non-variant product" };
-        if (!productData.sellingPrice) throw { message: "sellingPrice is required for non-variant product" };
-
-        formData.append("sku", productData.sku);
-        formData.append("sellingPrice", productData.sellingPrice);
-
-        if (productData.mrp) formData.append("mrp", productData.mrp);
-        if (productData.stockQuantity !== undefined)
-          formData.append("stockQuantity", productData.stockQuantity);
+      /* ===== VARIANTS (MANDATORY) ===== */
+      if (!Array.isArray(productData.variants) || productData.variants.length === 0) {
+        throw { message: "At least one variant is required" };
       }
+      formData.append("variants", JSON.stringify(productData.variants));
 
-      /* ===== OPTIONAL FIELDS ===== */
-      const optionalFields = [
-        "slug",
-        "brand",
-        "modelNumber",
-        "metaTitle",
-        "metaDescription",
-        "status",
-        "isFeatured",
-        "isRecommended",
-        "isDigital"
+      /* ===== OPTIONAL SIMPLE FIELDS ===== */
+      const optionalSimpleFields = [
+        "slug", "brand", "metaTitle", "metaDescription",
+        "status", "isFeatured", "isRecommended", "isDigital",
       ];
-
-      optionalFields.forEach(field => {
-        if (productData[field] !== undefined) {
+      optionalSimpleFields.forEach((field) => {
+        if (productData[field] !== undefined && productData[field] !== null) {
           formData.append(field, productData[field]);
         }
       });
 
-      /* ===== ARRAY / OBJECT FIELDS ===== */
-      const jsonFields = [
-        "specifications",
-        "keyFeatures",
-        "dimensions",
-        "tags",
-        "keywords"
-      ];
-
-      jsonFields.forEach(field => {
+      /* ===== JSON / ARRAY FIELDS ===== */
+      const jsonFields = ["specifications", "keyFeatures", "tags", "keywords"];
+      jsonFields.forEach((field) => {
         if (productData[field]) {
           formData.append(field, JSON.stringify(productData[field]));
         }
       });
 
-      /* ===== IMAGES ===== */
+      /* ===== IMAGES (FILES ONLY) ===== */
       if (!productData.images || productData.images.length === 0) {
-        throw { message: "At least one image is required" };
+        throw { message: "At least one product image is required" };
       }
-
-      productData.images.forEach(file => {
+      productData.images.forEach((file) => {
         formData.append("images", file);
       });
 
@@ -91,13 +56,11 @@ export const productService = {
       });
 
       return response.data;
-
     } catch (error) {
       console.error("❌ Create product error:", error.response?.data || error);
       throw error.response?.data || error;
     }
   },
-
 
   /* ================= GET ALL PRODUCTS ================= */
   getProducts: async (filters = {}) => {
@@ -105,46 +68,57 @@ export const productService = {
       const response = await instance.get("/products", { params: filters });
       return response.data.products;
     } catch (error) {
-      console.warn("API not available, returning mock products");
-      return mockProducts;
+      console.error("Get products error:", error);
+      throw error.response?.data || error;
     }
   },
 
-
   /* ================= GET PRODUCT BY ID ================= */
   getProductById: async (id) => {
-    const res = await instance.get(`/products/${id}`);
-    return res.data;
+    try {
+      const res = await instance.get(`/products/${id}`);
+      return res.data;
+    } catch (error) {
+      console.error("Get product by id error:", error);
+      throw error.response?.data || error;
+    }
   },
-
 
   /* ================= UPDATE PRODUCT ================= */
   updateProduct: async (id, productData) => {
     try {
       const formData = new FormData();
 
-      const variants = productData.variants?.length ? productData.variants : [];
-      const isVariantProduct = variants.length > 0;
-
-      Object.entries(productData).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && key !== "images") {
-          if (Array.isArray(value) || typeof value === "object") {
-            formData.append(key, JSON.stringify(value));
-          } else {
-            formData.append(key, value);
-          }
+      /* ===== SIMPLE STRING / BOOLEAN FIELDS ===== */
+      const simpleFields = [
+        "name", "slug", "productKey", "description", "category",
+        "brand", "modelNumber", "warranty", "returnPolicy",
+        "status", "metaTitle", "metaDescription",
+        "isRecommended", "isFeatured", "isDigital",
+      ];
+      simpleFields.forEach((field) => {
+        if (productData[field] !== undefined && productData[field] !== null) {
+          formData.append(field, productData[field]);
         }
       });
 
-      if (isVariantProduct) {
-        formData.append("variants", JSON.stringify(variants));
-        formData.delete("sku");
-        formData.delete("sellingPrice");
-        formData.delete("mrp");
-      }
+      /* ===== JSON FIELDS (arrays / objects) ===== */
+      // NOTE: variants aur imagesToDelete bhi yahan handle hote hain
+      // Double append nahi hoga kyunki ye loop aur alag block dono nahi hain
+      const jsonFields = [
+        "specifications", "keyFeatures", "tags", "keywords",
+        "variants", "imagesToDelete",
+      ];
+      jsonFields.forEach((field) => {
+        if (productData[field] !== undefined && productData[field] !== null) {
+          formData.append(field, JSON.stringify(productData[field]));
+        }
+      });
 
-      if (productData.images?.length) {
-        productData.images.forEach(file => {
+      /* ===== NEW IMAGE FILES ===== */
+      // productData.newImageFiles mein File objects aate hain frontend se
+      if (productData.newImageFiles && productData.newImageFiles.length > 0) {
+        productData.newImageFiles.forEach((file) => {
           formData.append("images", file);
         });
       }
@@ -154,18 +128,20 @@ export const productService = {
       });
 
       return res.data;
-
     } catch (error) {
       console.error("❌ Update product error:", error.response?.data || error);
       throw error.response?.data || error;
     }
   },
 
-
   /* ================= DELETE PRODUCT ================= */
   deleteProduct: async (id) => {
-    const res = await instance.delete(`/products/${id}`);
-    return res.data;
-  }
-
+    try {
+      const res = await instance.delete(`/products/${id}`);
+      return res.data;
+    } catch (error) {
+      console.error("Delete product error:", error);
+      throw error.response?.data || error;
+    }
+  },
 };

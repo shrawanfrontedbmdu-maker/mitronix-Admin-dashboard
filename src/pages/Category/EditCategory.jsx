@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { MdSave, MdArrowBack, MdCloudUpload } from "react-icons/md";
-import { categoryService } from "../api/categoryService.js";
+import { categoryService } from "../../api/categoryService.js";
 
 const BACKEND_URL = import.meta.env.VITE_API_BASE_URL.replace("/api", "");
 

@@ -144,7 +144,7 @@ export default function Store() {
           </p>
         </div>
         <Link
-          to="/stores/create"
+          to="/store/create"
           className="btn btn-primary"
           style={{
             display: "flex",
@@ -373,7 +373,7 @@ export default function Store() {
               No stores found
             </p>
             <Link
-              to="/stores/create"
+              to="/store/create"
               style={{
                 display: "inline-block",
                 padding: "10px 20px",

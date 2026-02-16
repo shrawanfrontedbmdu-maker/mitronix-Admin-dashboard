@@ -1,480 +1,1356 @@
-import { Link, useParams, useNavigate } from 'react-router-dom'
-import { MdEdit, MdDelete, MdArrowBack, MdInventory, MdCategory, MdAttachMoney, MdInfo } from 'react-icons/md'
-import { useState, useEffect } from 'react'
-import { productService } from '../api/productService.js'
-import { categoryService } from '../api/categoryService.js'
+import { Link, useParams, useNavigate } from "react-router-dom";
+import {
+  MdEdit,
+  MdDelete,
+  MdArrowBack,
+  MdInventory,
+  MdCategory,
+  MdAttachMoney,
+  MdInfo,
+  MdLocalOffer,
+  MdStar,
+  MdCheckCircle,
+} from "react-icons/md";
+import { useState, useEffect } from "react";
+import { productService } from "../api/productService.js";
+import { categoryService } from "../api/categoryService.js";
 
 function ProductDetails() {
-  const { id } = useParams()
-  const navigate = useNavigate()
+  const { id } = useParams();
+  const navigate = useNavigate();
 
-  const [product, setProduct] = useState(null)
-  const [category, setCategory] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [deleting, setDeleting] = useState(false)
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0)
+  const [product, setProduct] = useState(null);
+  const [category, setCategory] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        setLoading(true)
-        // For now, fetch all products and find the one with matching ID
-        // In a real app, you'd have a getProductById endpoint
-        const products = await productService.getProducts()
-        const foundProduct = products.find(p => p._id === id)
+        setLoading(true);
+        const productResponse = await productService.getProductById(id);
+        const foundProduct = productResponse.product || productResponse;
 
         if (foundProduct) {
-          setProduct(foundProduct)
+          setProduct(foundProduct);
 
-          const categories = await categoryService.getCategories()
-          const foundCategory = categories.find(cat => cat._id === foundProduct.category)
-          setCategory(foundCategory)
+          if (foundProduct.category) {
+            const categoriesRes = await categoryService.getCategories();
+            const categories = categoriesRes.categories || categoriesRes;
+            const categoryId =
+              foundProduct.category._id || foundProduct.category;
+            const foundCategory = categories.find(
+              (cat) => cat._id === categoryId,
+            );
+            setCategory(foundCategory);
+          }
         } else {
-          setError('Product not found')
+          setError("Product not found");
         }
       } catch (error) {
-        console.error('Error fetching product:', error)
-        setError('Failed to load product details')
+        console.error("Error fetching product:", error);
+        setError("Failed to load product details");
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
     if (id) {
-      fetchProduct()
+      fetchProduct();
     }
-  }, [id])
-
+  }, [id]);
 
   const handleDelete = async () => {
     if (window.confirm(`Are you sure you want to delete "${product?.name}"?`)) {
       try {
-        setDeleting(true)
-        await productService.deleteProduct(id)
-        alert('Product deleted successfully!')
-        navigate('/products/list')
+        setDeleting(true);
+        await productService.deleteProduct(id);
+        alert("Product deleted successfully!");
+        navigate("/admin/products/list");
       } catch (error) {
-        console.error('Error deleting product:', error)
-        alert('Failed to delete product. Please try again.')
+        console.error("Error deleting product:", error);
+        alert("Failed to delete product. Please try again.");
       } finally {
-        setDeleting(false)
+        setDeleting(false);
       }
     }
-  }
+  };
 
   if (loading) {
     return (
-      <div>
-        <div className="page-header">
-          <div className="page-title-section">
-            <h1 className="page-title">Product Details</h1>
-            <p className="page-subtitle">Loading product information...</p>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          backgroundColor: "#f9fafb",
+        }}
+      >
+        <div
+          style={{
+            padding: "32px",
+            backgroundColor: "white",
+            borderRadius: "12px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "40px",
+              height: "40px",
+              border: "4px solid #f3f4f6",
+              borderTop: "4px solid #3b82f6",
+              borderRadius: "50%",
+              animation: "spin 1s linear infinite",
+              margin: "0 auto 16px",
+            }}
+          ></div>
+          <div
+            style={{ fontSize: "16px", fontWeight: "500", color: "#111827" }}
+          >
+            Loading product details...
           </div>
         </div>
-        <div className="content-card" style={{ textAlign: 'center', padding: '40px' }}>
-          <div style={{
-            width: '24px',
-            height: '24px',
-            border: '3px solid #f3f3f3',
-            borderTop: '3px solid #3b82f6',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 20px'
-          }}></div>
-          <p>Loading product details...</p>
-        </div>
       </div>
-    )
+    );
   }
 
   if (error || !product) {
     return (
-      <div>
-        <div className="page-header">
-          <div className="page-title-section">
-            <h1 className="page-title">Product Details</h1>
-            <p className="page-subtitle">Product not found</p>
+      <div
+        style={{
+          padding: "24px",
+          backgroundColor: "#f9fafb",
+          minHeight: "100vh",
+        }}
+      >
+        <div style={{ maxWidth: "1400px", margin: "0 auto" }}>
+          <div
+            style={{
+              backgroundColor: "white",
+              borderRadius: "12px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+              padding: "64px 24px",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: "48px", marginBottom: "16px" }}>❌</div>
+            <h3
+              style={{
+                fontSize: "20px",
+                fontWeight: "600",
+                marginBottom: "8px",
+                color: "#dc2626",
+              }}
+            >
+              {error || "Product not found"}
+            </h3>
+            <p
+              style={{
+                fontSize: "14px",
+                color: "#6b7280",
+                marginBottom: "24px",
+              }}
+            >
+              The product you're looking for doesn't exist or has been removed.
+            </p>
+            <Link
+              to="/admin/products/list"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "10px 20px",
+                backgroundColor: "#3b82f6",
+                color: "white",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontSize: "14px",
+                fontWeight: "500",
+              }}
+            >
+              <MdArrowBack size={16} />
+              Back to Products
+            </Link>
           </div>
-          <div className="page-actions">
-            <Link to="/products/list" className="btn btn-secondary">
+        </div>
+      </div>
+    );
+  }
+
+  // Calculate total stock from variants if exists
+  const totalStock =
+    product.variants?.length > 0
+      ? product.variants.reduce((sum, v) => sum + (v.stockQuantity || 0), 0)
+      : product.stockQuantity || 0;
+
+  // Get price display
+  const displayPrice =
+    product.sellingPrice || product.variants?.[0]?.price || 0;
+  const displayMRP = product.mrp;
+
+  return (
+    <div
+      style={{
+        padding: "24px",
+        backgroundColor: "#f9fafb",
+        minHeight: "100vh",
+      }}
+    >
+      <div style={{ maxWidth: "1400px", margin: "0 auto" }}>
+        {/* Header */}
+        <div
+          style={{
+            marginBottom: "24px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "16px",
+          }}
+        >
+          <div>
+            <h1
+              style={{
+                fontSize: "28px",
+                fontWeight: "600",
+                margin: "0 0 4px 0",
+                color: "#111827",
+              }}
+            >
+              Product Details
+            </h1>
+            <p style={{ fontSize: "14px", color: "#6b7280", margin: 0 }}>
+              View and manage product information
+            </p>
+          </div>
+
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            <Link
+              to={`/admin/products/edit/${id}`}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "10px 16px",
+                backgroundColor: "#10b981",
+                color: "white",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontSize: "14px",
+                fontWeight: "500",
+                border: "none",
+              }}
+            >
+              <MdEdit size={16} />
+              Edit Product
+            </Link>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "10px 16px",
+                backgroundColor: deleting ? "#9ca3af" : "#ef4444",
+                color: "white",
+                borderRadius: "8px",
+                fontSize: "14px",
+                fontWeight: "500",
+                border: "none",
+                cursor: deleting ? "not-allowed" : "pointer",
+              }}
+            >
+              <MdDelete size={16} />
+              {deleting ? "Deleting..." : "Delete"}
+            </button>
+            <Link
+              to="/admin/products/list"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "10px 16px",
+                backgroundColor: "#f3f4f6",
+                color: "#374151",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontSize: "14px",
+                fontWeight: "500",
+                border: "1px solid #e5e7eb",
+              }}
+            >
               <MdArrowBack size={16} />
               Back to List
             </Link>
           </div>
         </div>
-        <div className="content-card" style={{ textAlign: 'center', padding: '40px' }}>
-          <p style={{ color: '#dc2626', marginBottom: '20px' }}>{error || 'Product not found'}</p>
-          <Link to="/products/list" className="btn btn-primary">
-            Back to Products
-          </Link>
-        </div>
-      </div>
-    )
-  }
 
-  return (
-    <div className="admin-product-page">
-      {/* Page Header */}
-      <div className="page-header">
-        <div className="page-title-section">
-          <h1 className="page-title">Product Details</h1>
-          <p className="page-subtitle">View and manage product information</p>
-        </div>
-        <div className="page-actions">
-          <Link to={`/products/edit/${id}`} className="btn btn-primary">
-            <MdEdit size={16} />
-            Edit Product
-          </Link>
-          <button
-            onClick={handleDelete}
-            className="btn btn-danger"
-            disabled={deleting}
+        {/* Main Content */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1.5fr",
+            gap: "24px",
+            marginBottom: "24px",
+          }}
+        >
+          {/* Left Column - Images */}
+          <div
+            style={{
+              backgroundColor: "white",
+              borderRadius: "12px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+              padding: "24px",
+              position: "sticky",
+              top: "24px",
+              alignSelf: "start",
+            }}
           >
-            <MdDelete size={16} />
-            {deleting ? 'Deleting...' : 'Delete Product'}
-          </button>
-          <Link to="/products/list" className="btn btn-secondary">
-            <MdArrowBack size={16} />
-            Back to List
-          </Link>
-        </div>
-      </div>
-
-      {/* Product Content */}
-      <div className="admin-content-container">
-        <div className="product-overview">
-          <div className="product-images-section">
-            <div className="admin-image-container">
+            {/* Main Image */}
+            <div
+              style={{
+                width: "100%",
+                aspectRatio: "1/1",
+                backgroundColor: "#f9fafb",
+                borderRadius: "12px",
+                overflow: "hidden",
+                marginBottom: "16px",
+                border: "1px solid #e5e7eb",
+              }}
+            >
               <img
-                className="admin-product-image"
-                src={product.images && product.images.length > 0 ? product.images[selectedImageIndex]?.url || product.images[0].url : 'https://via.placeholder.com/400x400'}
+                src={
+                  product.images?.[selectedImageIndex]?.url ||
+                  "https://via.placeholder.com/500"
+                }
                 alt={product.name}
-                onError={(e) => {
-                  e.target.src = 'https://via.placeholder.com/400x400?text=No+Image'
-                }}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                onError={(e) =>
+                  (e.target.src =
+                    "https://via.placeholder.com/500?text=No+Image")
+                }
               />
             </div>
+
+            {/* Thumbnail Gallery */}
             {product.images && product.images.length > 1 && (
-              <div className="admin-thumbnail-gallery">
-                <div className="admin-thumbnail-grid">
-                  {product.images.map((image, index) => (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(70px, 1fr))",
+                  gap: "12px",
+                }}
+              >
+                {product.images.map((image, index) => (
+                  <div
+                    key={index}
+                    onClick={() => setSelectedImageIndex(index)}
+                    style={{
+                      aspectRatio: "1/1",
+                      borderRadius: "8px",
+                      overflow: "hidden",
+                      cursor: "pointer",
+                      border:
+                        selectedImageIndex === index
+                          ? "2px solid #3b82f6"
+                          : "1px solid #e5e7eb",
+                      opacity: selectedImageIndex === index ? 1 : 0.6,
+                      transition: "all 0.2s",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.opacity =
+                        selectedImageIndex === index ? "1" : "0.6")
+                    }
+                  >
                     <img
-                      key={`product-image-${product._id || 'default'}-${index}-${image.url ? image.url.split('/').pop() : index}`}
-                      className={`admin-thumbnail ${selectedImageIndex === index ? 'active' : ''}`}
                       src={image.url}
                       alt={`${product.name} ${index + 1}`}
-                      onClick={() => setSelectedImageIndex(index)}
-                      onError={(e) => {
-                        e.target.src = 'https://via.placeholder.com/80x80?text=No+Image'
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
                       }}
+                      onError={(e) =>
+                        (e.target.src =
+                          "https://via.placeholder.com/100?text=No+Image")
+                      }
                     />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Badges */}
+            <div
+              style={{
+                marginTop: "24px",
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "8px",
+              }}
+            >
+              {product.isFeatured && (
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    backgroundColor: "#fef3c7",
+                    color: "#92400e",
+                  }}
+                >
+                  <MdStar size={14} />
+                  Featured
+                </div>
+              )}
+              {product.isRecommended && (
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    backgroundColor: "#dbeafe",
+                    color: "#1e40af",
+                  }}
+                >
+                  <MdCheckCircle size={14} />
+                  Recommended
+                </div>
+              )}
+              {product.isDigital && (
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    backgroundColor: "#e0e7ff",
+                    color: "#4338ca",
+                  }}
+                >
+                  Digital Product
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column - Details */}
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "24px" }}
+          >
+            {/* Product Header */}
+            <div
+              style={{
+                backgroundColor: "white",
+                borderRadius: "12px",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                padding: "24px",
+              }}
+            >
+              <h2
+                style={{
+                  fontSize: "24px",
+                  fontWeight: "600",
+                  margin: "0 0 12px 0",
+                  color: "#111827",
+                }}
+              >
+                {product.name}
+              </h2>
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  marginBottom: "16px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div
+                  style={{
+                    display: "inline-flex",
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    backgroundColor:
+                      product.status === "active" ? "#d1fae5" : "#f3f4f6",
+                    color: product.status === "active" ? "#065f46" : "#6b7280",
+                  }}
+                >
+                  {product.status === "active" ? "Active" : "Inactive"}
+                </div>
+
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    backgroundColor: totalStock > 0 ? "#d1fae5" : "#fee2e2",
+                    color: totalStock > 0 ? "#065f46" : "#991b1b",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: "6px",
+                      height: "6px",
+                      borderRadius: "50%",
+                      backgroundColor: totalStock > 0 ? "#10b981" : "#ef4444",
+                    }}
+                  ></span>
+                  {totalStock > 0 ? `${totalStock} in stock` : "Out of stock"}
+                </div>
+              </div>
+
+              <p
+                style={{
+                  fontSize: "14px",
+                  color: "#6b7280",
+                  lineHeight: "1.6",
+                  margin: "0 0 16px 0",
+                }}
+              >
+                {product.description}
+              </p>
+
+              {/* Pricing */}
+              <div
+                style={{
+                  padding: "16px",
+                  backgroundColor: "#f9fafb",
+                  borderRadius: "8px",
+                  marginBottom: "16px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "baseline",
+                    gap: "12px",
+                    marginBottom: "8px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "32px",
+                      fontWeight: "700",
+                      color: "#111827",
+                    }}
+                  >
+                    ₹{displayPrice.toLocaleString("en-IN")}
+                  </div>
+                  {displayMRP && displayMRP !== displayPrice && (
+                    <>
+                      <div
+                        style={{
+                          fontSize: "18px",
+                          color: "#9ca3af",
+                          textDecoration: "line-through",
+                        }}
+                      >
+                        ₹{displayMRP.toLocaleString("en-IN")}
+                      </div>
+                      <div
+                        style={{
+                          padding: "4px 8px",
+                          backgroundColor: "#10b981",
+                          color: "white",
+                          borderRadius: "4px",
+                          fontSize: "13px",
+                          fontWeight: "600",
+                        }}
+                      >
+                        {Math.round(
+                          ((displayMRP - displayPrice) / displayMRP) * 100,
+                        )}
+                        % OFF
+                      </div>
+                    </>
+                  )}
+                </div>
+                {product.costPrice && (
+                  <div style={{ fontSize: "13px", color: "#6b7280" }}>
+                    Cost Price: ₹{product.costPrice.toLocaleString("en-IN")}
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Info Grid */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "12px",
+                  padding: "16px",
+                  backgroundColor: "#f9fafb",
+                  borderRadius: "8px",
+                }}
+              >
+                {product.sku && (
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#6b7280",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      SKU
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        color: "#111827",
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {product.sku}
+                    </div>
+                  </div>
+                )}
+                {product.brand && (
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#6b7280",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      Brand
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        color: "#111827",
+                      }}
+                    >
+                      {product.brand}
+                    </div>
+                  </div>
+                )}
+                {category && (
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#6b7280",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      Category
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        color: "#111827",
+                      }}
+                    >
+                      {category.pageTitle || category.title || category.name}
+                    </div>
+                  </div>
+                )}
+                {product.modelNumber && (
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#6b7280",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      Model Number
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        color: "#111827",
+                      }}
+                    >
+                      {product.modelNumber}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Variants */}
+            {product.variants && product.variants.length > 0 && (
+              <div
+                style={{
+                  backgroundColor: "white",
+                  borderRadius: "12px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                  padding: "24px",
+                }}
+              >
+                <h3
+                  style={{
+                    fontSize: "18px",
+                    fontWeight: "600",
+                    margin: "0 0 16px 0",
+                    color: "#111827",
+                  }}
+                >
+                  Product Variants ({product.variants.length})
+                </h3>
+                <div style={{ display: "grid", gap: "12px" }}>
+                  {product.variants.map((variant, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        padding: "16px",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: "8px",
+                        backgroundColor: "#f9fafb",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "start",
+                          marginBottom: "12px",
+                        }}
+                      >
+                        <div>
+                          <div
+                            style={{
+                              fontSize: "14px",
+                              fontWeight: "600",
+                              color: "#111827",
+                              marginBottom: "4px",
+                            }}
+                          >
+                            {[
+                              variant.attributes?.color,
+                              variant.attributes?.size,
+                              variant.attributes?.model,
+                            ]
+                              .filter(Boolean)
+                              .join(" • ") || `Variant ${index + 1}`}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "12px",
+                              color: "#6b7280",
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            SKU: {variant.sku}
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            backgroundColor:
+                              variant.stockQuantity > 0 ? "#d1fae5" : "#fee2e2",
+                            color:
+                              variant.stockQuantity > 0 ? "#065f46" : "#991b1b",
+                          }}
+                        >
+                          {variant.stockQuantity > 0
+                            ? `${variant.stockQuantity} in stock`
+                            : "Out of stock"}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: "16px" }}>
+                        <div>
+                          <div style={{ fontSize: "11px", color: "#6b7280" }}>
+                            Price
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "16px",
+                              fontWeight: "600",
+                              color: "#111827",
+                            }}
+                          >
+                            ₹{variant.price.toLocaleString("en-IN")}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: "11px", color: "#6b7280" }}>
+                            Status
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "13px",
+                              fontWeight: "500",
+                              color: variant.isActive ? "#10b981" : "#9ca3af",
+                            }}
+                          >
+                            {variant.isActive ? "Active" : "Inactive"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
             )}
-          </div>
 
-          <div className="product-info-section">
-            <div className="content-card">
-              <div className="product-header-info">
-                <h2 className="product-name">{product.name}</h2>
-                <div className="product-badges">
-                  <span className={`status-badge ${product.stockStatus === 'InStock' ? 'active' : 'inactive'}`}>
-                    {product.stockStatus === 'InStock' ? 'In Stock' : 'Out of Stock'}
-                  </span>
-                  <span className={`status-badge ${product.isActive ? 'active' : 'inactive'}`}>
-                    {product.isActive ? 'Active' : 'Inactive'}
-                  </span>
+            {/* Specifications */}
+            {product.specifications && product.specifications.length > 0 && (
+              <div
+                style={{
+                  backgroundColor: "white",
+                  borderRadius: "12px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                  padding: "24px",
+                }}
+              >
+                <h3
+                  style={{
+                    fontSize: "18px",
+                    fontWeight: "600",
+                    margin: "0 0 16px 0",
+                    color: "#111827",
+                  }}
+                >
+                  Specifications
+                </h3>
+                <div style={{ display: "grid", gap: "12px" }}>
+                  {product.specifications.map((spec, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 2fr",
+                        padding: "12px",
+                        backgroundColor:
+                          index % 2 === 0 ? "#f9fafb" : "transparent",
+                        borderRadius: "6px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: "500",
+                          color: "#6b7280",
+                        }}
+                      >
+                        {spec.key}
+                      </div>
+                      <div style={{ fontSize: "14px", color: "#111827" }}>
+                        {spec.value}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
+            )}
 
-              <div className="admin-info-grid">
-                <div className="info-card">
-                  <div className="info-header">
-                    <MdAttachMoney className="info-icon" />
-                    <h3>Pricing Information</h3>
-                  </div>
-                  <div className="info-content">
-                    <div className="price-row">
-                      <span className="price-label">Selling Price:</span>
-                      <span className="price-value main-price">₹{product.price?.toLocaleString()}</span>
-                    </div>
-                    {product.mrp && product.mrp !== product.price && (
-                      <>
-                        <div className="price-row">
-                          <span className="price-label">MRP:</span>
-                          <span className="price-value">₹{product.mrp?.toLocaleString()}</span>
+            {/* Key Features */}
+            {product.keyFeatures && product.keyFeatures.length > 0 && (
+              <div
+                style={{
+                  backgroundColor: "white",
+                  borderRadius: "12px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                  padding: "24px",
+                }}
+              >
+                <h3
+                  style={{
+                    fontSize: "18px",
+                    fontWeight: "600",
+                    margin: "0 0 16px 0",
+                    color: "#111827",
+                  }}
+                >
+                  Key Features
+                </h3>
+                <div style={{ display: "grid", gap: "12px" }}>
+                  {product.keyFeatures.map((feature, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        display: "flex",
+                        gap: "12px",
+                        padding: "12px",
+                        backgroundColor: "#f9fafb",
+                        borderRadius: "6px",
+                        borderLeft: "3px solid #3b82f6",
+                      }}
+                    >
+                      <MdCheckCircle
+                        size={20}
+                        style={{
+                          color: "#10b981",
+                          flexShrink: 0,
+                          marginTop: "2px",
+                        }}
+                      />
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "14px",
+                            fontWeight: "600",
+                            color: "#111827",
+                            marginBottom: "2px",
+                          }}
+                        >
+                          {feature.key}
                         </div>
-                        <div className="price-row">
-                          <span className="price-label">Discount:</span>
-                          <span className="price-value discount">
-                            {Math.round(((product.mrp - product.price) / product.mrp) * 100)}% off
-                          </span>
+                        <div style={{ fontSize: "13px", color: "#6b7280" }}>
+                          {feature.value}
                         </div>
-                      </>
-                    )}
-                    {product.discountPrice && product.discountPrice !== product.price && (
-                      <div className="price-row">
-                        <span className="price-label">Discounted Price:</span>
-                        <span className="price-value">₹{product.discountPrice?.toLocaleString()}</span>
                       </div>
-                    )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Warranty & Returns */}
+            <div
+              style={{
+                backgroundColor: "white",
+                borderRadius: "12px",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                padding: "24px",
+              }}
+            >
+              <h3
+                style={{
+                  fontSize: "18px",
+                  fontWeight: "600",
+                  margin: "0 0 16px 0",
+                  color: "#111827",
+                }}
+              >
+                Warranty & Returns
+              </h3>
+              <div style={{ display: "grid", gap: "16px" }}>
+                <div>
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: "600",
+                      color: "#374151",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    Warranty Information
+                  </div>
+                  <div
+                    style={{
+                      padding: "12px",
+                      backgroundColor: "#f9fafb",
+                      borderRadius: "6px",
+                      fontSize: "14px",
+                      color: "#6b7280",
+                      lineHeight: "1.6",
+                    }}
+                  >
+                    {product.warranty || "No warranty information available"}
                   </div>
                 </div>
-
-                <div className="info-card">
-                  <div className="info-header">
-                    <MdInventory className="info-icon" />
-                    <h3>Inventory & Stock</h3>
+                <div>
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: "600",
+                      color: "#374151",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    Return Policy
                   </div>
-                  <div className="info-content">
-                    <div className="stock-row">
-                      <span className="stock-label">Stock Quantity:</span>
-                      <span className={`stock-value ${product.stockQuantity === 0 ? 'out-of-stock' : 'in-stock'}`}>
-                        {product.stockQuantity || 0} units
-                      </span>
-                    </div>
-                    <div className="stock-row">
-                      <span className="stock-label">Stock Status:</span>
-                      <span className={`stock-status ${product.stockStatus === 'InStock' ? 'in-stock' : 'out-of-stock'}`}>
-                        {product.stockStatus === 'InStock' ? 'In Stock' : 'Out of Stock'}
-                      </span>
-                    </div>
-                    {product.sku && (
-                      <div className="stock-row">
-                        <span className="stock-label">SKU:</span>
-                        <span className="stock-value">{product.sku}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="info-card">
-                  <div className="info-header">
-                    <MdCategory className="info-icon" />
-                    <h3>Product Details</h3>
-                  </div>
-                  <div className="info-content">
-                    <div className="detail-row">
-                      <span className="detail-label">Category:</span>
-                      <span className="detail-value">{category ? category.title : 'Unknown'}</span>
-                    </div>
-                    {product.brand && (
-                      <div className="detail-row">
-                        <span className="detail-label">Brand:</span>
-                        <span className="detail-value">{product.brand}</span>
-                      </div>
-                    )}
-                    {product.colour && (
-                      <div className="detail-row">
-                        <span className="detail-label">Color:</span>
-                        <span className="detail-value">{product.colour}</span>
-                      </div>
-                    )}
-                    {product.size && (
-                      <div className="detail-row">
-                        <span className="detail-label">Size:</span>
-                        <span className="detail-value">{product.size}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="info-card">
-                  <div className="info-header">
-                    <MdInfo className="info-icon" />
-                    <h3>Additional Information</h3>
-                  </div>
-                  <div className="info-content">
-                    <div className="detail-row">
-                      <span className="detail-label">Created:</span>
-                      <span className="detail-value">{new Date(product.createdAt || Date.now()).toLocaleDateString()}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Last Updated:</span>
-                      <span className="detail-value">{new Date(product.updatedAt || Date.now()).toLocaleDateString()}</span>
-                    </div>
-                    {product.weight && (
-                      <div className="detail-row">
-                        <span className="detail-label">Weight:</span>
-                        <span className="detail-value">{product.weight}</span>
-                      </div>
-                    )}
-                    {product.dimensions && (
-                      <div className="detail-row">
-                        <span className="detail-label">Dimensions:</span>
-                        <span className="detail-value">{product.dimensions}</span>
-                      </div>
-                    )}
+                  <div
+                    style={{
+                      padding: "12px",
+                      backgroundColor: "#f9fafb",
+                      borderRadius: "6px",
+                      fontSize: "14px",
+                      color: "#6b7280",
+                      lineHeight: "1.6",
+                    }}
+                  >
+                    {product.returnPolicy ||
+                      "No return policy information available"}
                   </div>
                 </div>
               </div>
-
-              {product.description && (
-                <div className="description-section">
-                  <h3>Product Description</h3>
-                  <p className="description-text">{product.description}</p>
-                </div>
-              )}
-   
-              {/* {product.variants && product.variants.length > 0 && (
-                <div className="variants-section">
-                  <h3>Available Variants</h3>
-                  <div className="variants-list">
-                    {product.variants?.map((variant, index) => (
-                      <span key={`variant-${product._id || 'default'}-${index}-${variant.replace(/[^a-zA-Z0-9]/g, '')}`} className="variant-badge">{variant}</span>
-                    ))}
-                  </div>
-                </div>
-              )} */}
-
-              {/* {product.tags && product.tags.length > 0 && (
-                <div className="tags-section">
-                  <h3>Product Tags</h3>
-                  <div className="tags-list">
-                    {product.tags.map((tag, index) => (
-                      <span key={`tag-${product._id || 'default'}-${index}-${tag.replace(/[^a-zA-Z0-9]/g, '')}`} className="tag">{tag}</span>
-                    ))}
-                  </div>
-                </div>
-              )} */}
             </div>
-          </div>
-        </div>
 
-        {/* Additional Product Information */}
-        <div className="product-additional-info">
-
-          <div className="info-tab-content">
-            {product.specification && (
-              <div className="tab-section">
-                <h3>Specifications</h3>
-                <div className="specifications-content">
-                  <p>{product.specification}</p>
-                </div>
-              </div>
-            )}
-
-            {(product.warranty || product.returnPolicy) && (
-              <div className="tab-section">
-                <h3>Warranty & Returns</h3>
-                <div className="warranty-info">
-                  {product.warranty && (
-                    <div className="info-item">
-                      <h4>Warranty</h4>
-                      <p>{product.warranty}</p>
-                    </div>
-                  )}
-                  {product.returnPolicy && (
-                    <div className="info-item">
-                      <h4>Return Policy</h4>
-                      <p>{product.returnPolicy}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {product.shipping && (
-              <div className="tab-section">
-                <h3>Shipping Information</h3>
-                <div className="shipping-info">
-                  <div className="shipping-item">
-                    <strong>Delivery:</strong> {product.shipping.charges}
+            {/* Dimensions */}
+            {product.dimensions &&
+              (product.dimensions.weight || product.dimensions.length) && (
+                <div
+                  style={{
+                    backgroundColor: "white",
+                    borderRadius: "12px",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                    padding: "24px",
+                  }}
+                >
+                  <h3
+                    style={{
+                      fontSize: "18px",
+                      fontWeight: "600",
+                      margin: "0 0 16px 0",
+                      color: "#111827",
+                    }}
+                  >
+                    Physical Details
+                  </h3>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fit, minmax(150px, 1fr))",
+                      gap: "16px",
+                    }}
+                  >
+                    {product.dimensions.weight && (
+                      <div
+                        style={{
+                          padding: "12px",
+                          backgroundColor: "#f9fafb",
+                          borderRadius: "8px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "#6b7280",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          Weight
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "16px",
+                            fontWeight: "600",
+                            color: "#111827",
+                          }}
+                        >
+                          {product.dimensions.weight}{" "}
+                          {product.dimensions.unit === "inch" ? "lb" : "kg"}
+                        </div>
+                      </div>
+                    )}
+                    {product.dimensions.length && (
+                      <div
+                        style={{
+                          padding: "12px",
+                          backgroundColor: "#f9fafb",
+                          borderRadius: "8px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "#6b7280",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          Length
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "16px",
+                            fontWeight: "600",
+                            color: "#111827",
+                          }}
+                        >
+                          {product.dimensions.length} {product.dimensions.unit}
+                        </div>
+                      </div>
+                    )}
+                    {product.dimensions.width && (
+                      <div
+                        style={{
+                          padding: "12px",
+                          backgroundColor: "#f9fafb",
+                          borderRadius: "8px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "#6b7280",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          Width
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "16px",
+                            fontWeight: "600",
+                            color: "#111827",
+                          }}
+                        >
+                          {product.dimensions.width} {product.dimensions.unit}
+                        </div>
+                      </div>
+                    )}
+                    {product.dimensions.height && (
+                      <div
+                        style={{
+                          padding: "12px",
+                          backgroundColor: "#f9fafb",
+                          borderRadius: "8px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "#6b7280",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          Height
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "16px",
+                            fontWeight: "600",
+                            color: "#111827",
+                          }}
+                        >
+                          {product.dimensions.height} {product.dimensions.unit}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="shipping-item">
-                    <strong>Delivery Time:</strong> {product.shipping.deliveryTime}
-                  </div>
-                  {product.shipping.restrictions && (
-                    <div className="shipping-item">
-                      <strong>Note:</strong> {product.shipping.restrictions}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {(product.weight || product.dimensions) && (
-              <div className="tab-section">
-                <h3>Physical Details</h3>
-                <div className="physical-details">
-                  {product.weight && (
-                    <div className="detail-row">
-                      <span className="detail-label">Weight:</span>
-                      <span className="detail-value">{product.weight}</span>
-                    </div>
-                  )}
-                  {product.dimensions && (
-                    <div className="detail-row">
-                      <span className="detail-label">Dimensions:</span>
-                      <span className="detail-value">{product.dimensions}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Admin-only sections */}
-            <div className="admin-only-section">
-              <h3>Admin Information</h3>
-
-              {(product.barcode || product.hsnCode) && (
-                <div className="admin-codes">
-                  <h4>Product Codes</h4>
-                  {product.barcode && (
-                    <div className="code-item">
-                      <span className="code-label">Barcode:</span>
-                      <span className="code-value">{product.barcode}</span>
-                    </div>
-                  )}
-                  {product.hsnCode && (
-                    <div className="code-item">
-                      <span className="code-label">HSN Code:</span>
-                      <span className="code-value">{product.hsnCode}</span>
-                    </div>
-                  )}
                 </div>
               )}
 
-              {product.supplier && (
-                <div className="supplier-info">
-                  <h4>Supplier Details</h4>
-                  <div className="supplier-details">
-                    <div className="supplier-row">
-                      <span className="supplier-label">Name:</span>
-                      <span className="supplier-value">{product.supplier.name}</span>
+            {/* Tags */}
+            {product.tags && product.tags.length > 0 && (
+              <div
+                style={{
+                  backgroundColor: "white",
+                  borderRadius: "12px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                  padding: "24px",
+                }}
+              >
+                <h3
+                  style={{
+                    fontSize: "18px",
+                    fontWeight: "600",
+                    margin: "0 0 16px 0",
+                    color: "#111827",
+                  }}
+                >
+                  Tags
+                </h3>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                  {product.tags.map((tag, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        padding: "6px 12px",
+                        backgroundColor: "#e0e7ff",
+                        color: "#4338ca",
+                        borderRadius: "6px",
+                        fontSize: "13px",
+                        fontWeight: "500",
+                      }}
+                    >
+                      {tag}
                     </div>
-                    {product.supplier.contact && (
-                      <div className="supplier-row">
-                        <span className="supplier-label">Contact:</span>
-                        <span className="supplier-value">{product.supplier.contact}</span>
-                      </div>
-                    )}
-                    {product.supplier.email && (
-                      <div className="supplier-row">
-                        <span className="supplier-label">Email:</span>
-                        <span className="supplier-value">{product.supplier.email}</span>
-                      </div>
-                    )}
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Admin Info */}
+            <div
+              style={{
+                backgroundColor: "white",
+                borderRadius: "12px",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                padding: "24px",
+              }}
+            >
+              <h3
+                style={{
+                  fontSize: "18px",
+                  fontWeight: "600",
+                  margin: "0 0 16px 0",
+                  color: "#111827",
+                }}
+              >
+                Admin Information
+              </h3>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "16px",
+                  padding: "16px",
+                  backgroundColor: "#f9fafb",
+                  borderRadius: "8px",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#6b7280",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Product Key
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: "600",
+                      color: "#111827",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    {product.productKey}
                   </div>
                 </div>
-              )}
-
-              <div className="product-history">
-                <h4>Product History</h4>
-                <div className="history-details">
-                  <div className="history-row">
-                    <span className="history-label">Created:</span>
-                    <span className="history-value">{new Date(product.createdAt || Date.now()).toLocaleDateString()}</span>
+                <div>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#6b7280",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Stock Status
                   </div>
-                  <div className="history-row">
-                    <span className="history-label">Last Updated:</span>
-                    <span className="history-value">{new Date(product.updatedAt || Date.now()).toLocaleDateString()}</span>
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: "600",
+                      color: "#111827",
+                    }}
+                  >
+                    {product.stockStatus}
                   </div>
-                  <div className="history-row">
-                    <span className="history-label">Status:</span>
-                    <span className="history-value">{product.isActive ? 'Active' : 'Inactive'}</span>
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#6b7280",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Low Stock Threshold
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: "600",
+                      color: "#111827",
+                    }}
+                  >
+                    {product.lowStockThreshold || 5} units
+                  </div>
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#6b7280",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Allow Backorder
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: "600",
+                      color: product.allowBackorder ? "#10b981" : "#ef4444",
+                    }}
+                  >
+                    {product.allowBackorder ? "Yes" : "No"}
+                  </div>
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#6b7280",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Created At
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: "600",
+                      color: "#111827",
+                    }}
+                  >
+                    {new Date(product.createdAt).toLocaleDateString("en-IN", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#6b7280",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Last Updated
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: "600",
+                      color: "#111827",
+                    }}
+                  >
+                    {new Date(product.updatedAt).toLocaleDateString("en-IN", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })}
                   </div>
                 </div>
               </div>
@@ -482,8 +1358,17 @@ function ProductDetails() {
           </div>
         </div>
       </div>
+
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}
+      </style>
     </div>
-  )
+  );
 }
 
-export default ProductDetails
+export default ProductDetails;

@@ -30,7 +30,7 @@ export default function AddStore() {
   };
 
   const handleCancel = () => {
-    navigate("/stores/list");
+    navigate("/store/list");
   };
 
   const handleSubmit = async (e) => {
@@ -82,7 +82,7 @@ export default function AddStore() {
 
         // Redirect after 2 seconds
         setTimeout(() => {
-          navigate("/stores/list");
+          navigate("/store/list");
         }, 2000);
       }
     } catch (err) {

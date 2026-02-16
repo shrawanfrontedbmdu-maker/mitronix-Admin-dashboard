@@ -82,6 +82,7 @@ function InfoSectionsList() {
                 <th style={{ padding: "10px" }}>Title</th>
                 <th style={{ padding: "10px" }}>Subtitle</th>
                 <th style={{ padding: "10px" }}>Description</th>
+                <th style={{ padding: "10px" }}>Category</th>
                 <th style={{ width: "220px", textAlign: "center", padding: "10px" }}>Actions</th>
               </tr>
             </thead>
@@ -129,6 +130,11 @@ function InfoSectionsList() {
                       {section.description || "-"}
                     </td>
 
+                    {/* Category */}
+                    <td style={{ verticalAlign: "middle" }}>
+                      {section.category?.pageTitle || section.category || "-"}
+                    </td>
+
                     {/* Actions */}
                     <td style={{ textAlign: "center", verticalAlign: "middle" }}>
                       <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
@@ -153,7 +159,7 @@ function InfoSectionsList() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} style={{ textAlign: "center", padding: "20px" }}>
+                  <td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>
                     No info sections found
                   </td>
                 </tr>

@@ -12,7 +12,7 @@ import {
 } from "react-icons/md";
 import instance from "../api/axios.config";
 
-function Login() {
+function Login({role}) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -42,6 +42,7 @@ function Login() {
     try {
       setLoading(true);
       setError("");
+      if(role === "admin"){
 
       const response = await instance.post(
         `/admin/login`,
@@ -54,9 +55,27 @@ function Login() {
       const { token, admin } = response.data;
       localStorage.setItem("adminToken", token);
       localStorage.setItem("adminData", JSON.stringify(admin));
+      localStorage.setItem("role", "admin");
 
-      navigate("/dashboard");
-    } catch (error) {
+      navigate("/admin/dashboard");
+
+    } else if(role === "storeManager"){
+     console.log("i am called")
+      const response = await instance.post(
+        `/stores/login`,
+        {
+          email: formData.email,
+          password: formData.password,
+        },
+      );
+      console.log(response)
+      const { token, store } = response.data;
+      localStorage.setItem("storeToken", token);
+      localStorage.setItem("storeData", JSON.stringify(store));
+      localStorage.setItem("role", "storeManager");
+
+      navigate("/store/dashboard");
+    } }catch (error) {
       console.error(error);
       if (error.response) {
         setError(error.response.data.message || "Login failed");
@@ -79,7 +98,6 @@ function Login() {
         <div className="auth-card">
           <div className="auth-header">
             <div className="auth-logo">
-              <MdBusiness className="logo-icon" />
               <span className="logo-text">Mittronix</span>
             </div>
             <h1>Welcome Back</h1>

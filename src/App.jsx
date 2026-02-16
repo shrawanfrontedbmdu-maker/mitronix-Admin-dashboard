@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Admin from './Admin';
 import Stores from './Stores';
-import Login from './pages/Login';
 
 const App = () => {
   useEffect(() => {

@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { MdAdd, MdEdit, MdDelete, MdSearch, MdImageNotSupported } from "react-icons/md";
 import { useState, useEffect, useCallback } from "react";
-import { categoryService } from "../api/categoryService.js";
+import { categoryService } from "../../api/categoryService.js";
 
 const BACKEND_URL = import.meta.env.VITE_API_BASE_URL.replace("/api", "");
 
@@ -128,7 +128,7 @@ function CategoriesList() {
           </div>
 
           <Link 
-            to="/categories/create" 
+            to="/admin/categories/create" 
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -421,7 +421,7 @@ function CategoriesList() {
                             justifyContent: 'center'
                           }}>
                             <Link
-                              to={`/categories/edit/${category._id}`}
+                              to={`/admin/categories/edit/${category._id}`}
                               style={{
                                 display: 'flex',
                                 alignItems: 'center',

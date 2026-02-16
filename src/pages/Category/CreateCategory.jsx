@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { MdSave, MdClose, MdCloudUpload, MdImage } from "react-icons/md";
-import { categoryService } from "../api/categoryService";
+import { categoryService } from "../../api/categoryService";
 
 function CreateCategoryModal({ onClose, onSuccess }) {
   const mainInputRef = useRef(null);
@@ -191,7 +191,11 @@ function CreateCategoryModal({ onClose, onSuccess }) {
             </p>
           </div>
           <button
-            onClick={onClose}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              onClose();
+            }}
             disabled={loading}
             style={{
               display: 'flex',
@@ -553,7 +557,10 @@ function CreateCategoryModal({ onClose, onSuccess }) {
           }}>
             <button
               type="button"
-              onClick={onClose}
+              onClick={(e) => {
+                e.preventDefault();
+                onClose();
+              }}
               disabled={loading}
               style={{
                 display: 'flex',

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
 import {
   MdEmail,
   MdLock,
@@ -11,6 +10,7 @@ import {
   MdArrowBack,
 } from "react-icons/md";
 import instance from "../api/axios.config";
+import axios from "axios";
 
 function Login({role}) {
   const navigate = useNavigate();
@@ -44,14 +44,13 @@ function Login({role}) {
       setError("");
       if(role === "admin"){
 
-      const response = await instance.post(
-        `/admin/login`,
+      const response = await axios.post(
+        `http://localhost:3000/api/admin/login`,
         {
           email: formData.email,
           password: formData.password,
         },
       );
-
       const { token, admin } = response.data;
       localStorage.setItem("adminToken", token);
       localStorage.setItem("adminData", JSON.stringify(admin));

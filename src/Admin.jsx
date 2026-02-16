@@ -14,9 +14,9 @@ import ProductGrid from "./pages/ProductGrid";
 import ProductDetails from "./pages/ProductDetails";
 import ProductEdit from "./pages/ProductEdit";
 import CreateProduct from "./pages/CreateProduct";
-import CategoriesList from "./pages/CategoriesList";
-import CreateCategory from "./pages/CreateCategory";
-import EditCategory from "./pages/EditCategory";
+import CategoriesList from "./pages/Category/CategoriesList";
+import CreateCategory from "./pages/Category/CreateCategory";
+import EditCategory from "./pages/Category/EditCategory";
 import OrdersList from "./pages/OrdersList";
 import OrderDetails from "./pages/OrderDetails";
 import OrderAdd from "./pages/OrderAdd";
@@ -66,6 +66,7 @@ import { useState } from "react";
 import { useEffect } from "react";
 import Store from "./pages/stores/Store";
 import AddStore from "./pages/stores/AddStore";
+import { Filters } from "./pages/Filters";
 
 function Admin() {
   const [isLoading, setIsLoading] = useState(true);
@@ -228,6 +229,8 @@ function Admin() {
             <Route path="roles/create" element={<CreateRole />} />
             <Route path="roles/:id" element={<RoleDetails />} />
             <Route path="roles/edit/:id" element={<RoleEdit />} />
+
+            <Route path="filters" element={<Filters />} />
 
             {/* Placeholder routes for other nav items */}
 

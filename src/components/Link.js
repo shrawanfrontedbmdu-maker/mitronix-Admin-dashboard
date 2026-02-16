@@ -28,7 +28,7 @@ const sidebarLinks = [
   },
   {
     label: "Filter",
-    path: "/filter",
+    path: "/filters",
     icon: MdFilterAlt,
     roles: ["admin"],
   },
@@ -120,8 +120,8 @@ const sidebarLinks = [
     match: "/store",
     roles: ["admin"],
     children: [
-      { label: "All Stores", path: "/store/list" },
-      { label: "Add Store", path: "/store/create" },
+      { label: "All Stores", path: "/stores/list" },
+      { label: "Add Store", path: "/stores/create" },
 
     ],
   },

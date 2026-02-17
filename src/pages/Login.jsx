@@ -44,8 +44,8 @@ function Login({role}) {
       setError("");
       if(role === "admin"){
 
-      const response = await axios.post(
-        `http://localhost:3000/api/admin/login`,
+      const response = await instance.post(
+        `/admin/login`,
         {
           email: formData.email,
           password: formData.password,

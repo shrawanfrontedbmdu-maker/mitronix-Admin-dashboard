@@ -27,7 +27,6 @@ import InvoiceAdd from "./pages/InvoiceAdd";
 import InvoiceEdit from "./pages/InvoiceEdit";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
-import Notifications from "./pages/Notifications";
 import ServiceRequestList from "./pages/ServiceRequestList";
 import ServiceRequestDetails from "./pages/ServiceRequestDetails";
 import ServiceRequestEdit from "./pages/ServiceRequestEdit";
@@ -67,6 +66,7 @@ import { useEffect } from "react";
 import Store from "./pages/stores/Store";
 import AddStore from "./pages/stores/AddStore";
 import { Filters } from "./pages/Filters";
+import NotificationDashboard from "./pages/NotificationDashboard";
 
 function Admin() {
   const [isLoading, setIsLoading] = useState(true);
@@ -182,7 +182,7 @@ function Admin() {
             <Route path="settings" element={<Settings />} />
             <Route path="profile" element={<Profile />} />
             <Route path="profle/edit" element={<Editprofile />} />
-            <Route path="notifications" element={<Notifications />} />
+            <Route path="notifications" element={<NotificationDashboard />} />
             <Route path="service-request" element={<ServiceRequestList />} />
 
             {/*Coupons Routes  */}

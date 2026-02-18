@@ -270,12 +270,12 @@ function OrdersList() {
                   <th>Order ID</th>
                   <th>Created at</th>
                   <th>Customer</th>
-                  <th>Mode</th>
+                  <th>Payment Mode</th>
                   <th>Priority</th>
                   <th>Total</th>
                   <th>Payment Status</th>
                   <th>Items</th>
-                  <th>Delivery Number</th>
+                  <th>Order Number</th>
                   <th>Order Status</th>
                   <th>Action</th>
                 </tr>
@@ -292,8 +292,8 @@ function OrdersList() {
                       </Link>
                     </td>
                     <td>{new Date(order.orderDate || order.createdAt).toLocaleDateString()}</td>
-                    <td>{order.customerName || order.customer || 'N/A'}</td>
-                    <td>{order.mode || 'Online'}</td>
+                    <td>{order.customerName || order.customer.name || 'N/A'}</td>
+                    <td>{order.payment.method || 'Online'}</td>
                     <td>
                       <span
                         className={`priority-badge ${getPriorityClass(
@@ -313,8 +313,8 @@ function OrdersList() {
                         {order.paymentStatus || 'Pending'}
                       </span>
                     </td>
-                    <td>{order.products?.length || order.items || 0}</td>
-                    <td>{order.deliveryNumber || order.trackingnumber || '-'}</td>
+                    <td>{order?.length || order.items?.length || 0}</td>
+                    <td>{order.orderNumber || '-'}</td>
                     <td>
                       <span
                         className={`status-badge ${getStatusBadgeClass(
@@ -327,14 +327,14 @@ function OrdersList() {
                     <td>
                       <div className="action-buttons">
                         <Link
-                          to={`/orders/details/${order._id}`}
+                          to={`/admin/orders/details/${order._id}`}
                           className="action-btn view"
                           title="View Order"
                         >
                           <MdVisibility size={16} />
                         </Link>
                         <Link
-                          to={`/orders/edit/${order._id}`}
+                          to={`/admin/orders/edit/${order._id}`}
                           className="action-btn edit"
                           title="Edit Order"
                         >

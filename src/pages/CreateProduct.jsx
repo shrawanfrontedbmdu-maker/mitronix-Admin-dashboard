@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { MdCloudUpload, MdClose, MdSave, MdArrowBack } from "react-icons/md";
 import { productService } from "../api/productService.js";
 import { categoryService } from "../api/categoryService.js";
+import { subcategoryService } from "../api/subcategoryService.js";
+import { filterService } from "../api/filterService.js";
 
 const BACKEND_URL = "https://miltronix-backend-1.onrender.com";
 
@@ -15,6 +17,8 @@ function CreateProduct() {
     productKey: "",
     description: "",
     category: "",
+    subcategory: "",
+    filterOptions: [],
     brand: "",
     modelNumber: "",
     mrp: "",
@@ -54,6 +58,8 @@ function CreateProduct() {
   const [images, setImages] = useState([]);
   const [dragOver, setDragOver] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [subcategories, setSubcategories] = useState([]);
+  const [filterGroups, setFilterGroups] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -66,7 +72,11 @@ function CreateProduct() {
         const categoryList = res.data || res;
         setCategories(categoryList);
         if (categoryList.length > 0) {
-          setFormData((prev) => ({ ...prev, category: categoryList[0]._id }));
+          const firstId = categoryList[0]._id;
+          setFormData((prev) => ({ ...prev, category: firstId }));
+          // load related subcategories and filters
+          loadSubcategories(firstId);
+          loadFilterGroups(firstId);
         }
       } catch (error) {
         console.error("Error fetching categories:", error);
@@ -100,6 +110,30 @@ function CreateProduct() {
     }
   };
 
+  // fetch subcategories for chosen category
+  const loadSubcategories = async (categoryId) => {
+    if (!categoryId) return;
+    try {
+      const data = await subcategoryService.getSubcategoriesByCategory(categoryId);
+      setSubcategories(data || []);
+    } catch (err) {
+      console.error("Failed to load subcategories", err);
+      setSubcategories([]);
+    }
+  };
+
+  const loadFilterGroups = async (categoryId) => {
+    if (!categoryId) return;
+    try {
+      const groups = await filterService.getFilterGroupsByCategory(categoryId);
+      console.log(groups)
+      setFilterGroups(groups || []);
+    } catch (err) {
+      console.error("Failed to load filter groups", err);
+      setFilterGroups([]);
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     const val = type === "checkbox" ? checked : value;
@@ -118,6 +152,18 @@ function CreateProduct() {
         const currentMrp = name === "mrp" ? val : newData.mrp;
         validatePricing(currentPrice, currentMrp);
       }
+
+      // when category changes, reset dependent values and reload lists
+      if (name === "category") {
+        newData.subcategory = "";
+        newData.filterOptions = [];
+        // clear previous lists while loading new ones
+        setSubcategories([]);
+        setFilterGroups([]);
+        loadSubcategories(val);
+        loadFilterGroups(val);
+      }
+
       return newData;
     });
   };
@@ -224,6 +270,54 @@ function CreateProduct() {
     setImages((prev) => [...prev, ...newImages]);
   };
 
+  // variant-specific image helpers
+  const handleVariantImageUpload = (variantIndex, files) => {
+    const validTypes = [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+    ];
+
+    const updated = [...formData.variants];
+    const existing = updated[variantIndex]?.images || [];
+    const max = 3; // allow up to 3 images per variant
+    const remaining = max - existing.length;
+    const filesToProcess = Array.from(files).slice(0, remaining);
+
+    const validFiles = filesToProcess.filter((file) => {
+      if (!validTypes.includes(file.type)) {
+        setError(`Invalid type: ${file.name}`);
+        return false;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        setError(`File too large: ${file.name}`);
+        return false;
+      }
+      return true;
+    });
+
+    const newImages = validFiles.map((file) => ({
+      file,
+      preview: URL.createObjectURL(file),
+      id: Date.now() + Math.random(),
+    }));
+
+    updated[variantIndex].images = [...existing, ...newImages];
+    setFormData((prev) => ({ ...prev, variants: updated }));
+  };
+
+  const removeVariantImage = (variantIndex, imageId) => {
+    const updated = [...formData.variants];
+    const imagesArr = updated[variantIndex]?.images || [];
+    const removed = imagesArr.find((img) => img.id === imageId);
+    if (removed && removed.preview) {
+      URL.revokeObjectURL(removed.preview);
+    }
+    updated[variantIndex].images = imagesArr.filter((img) => img.id !== imageId);
+    setFormData((prev) => ({ ...prev, variants: updated }));
+  };
   const handleFileSelect = (e) => handleImageUpload(e.target.files);
   const handleDrop = (e) => {
     e.preventDefault();
@@ -303,6 +397,8 @@ function CreateProduct() {
         productKey,
         description: formData.description,
         category: formData.category,
+        subcategory: formData.subcategory || undefined,
+        filterOptions: formData.filterOptions || [],
         brand: formData.brand || undefined,
         modelNumber: formData.modelNumber || undefined,
         mrp:
@@ -881,7 +977,87 @@ function CreateProduct() {
                   ))}
                 </select>
               </div>
+
+              {/* Subcategory dropdown - dependent on selected category */}
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Subcategory
+                </label>
+                <select
+                  name="subcategory"
+                  value={formData.subcategory}
+                  onChange={handleInputChange}
+                  disabled={subcategories.length === 0 || loading}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    outline: "none",
+                    backgroundColor: "white",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                >
+                  <option value="">Select a subcategory</option>
+                  {subcategories.map((sc) => (
+                    <option key={sc._id} value={sc._id}>
+                      {sc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
+
+            {/* Filter groups/options section */}
+            {filterGroups.length > 0 && (
+              <div style={{ marginBottom: "24px" }}>
+                <h4 style={{ fontSize: "16px", fontWeight: "600", marginBottom: "8px" }}>
+                  Filter Options
+                </h4>
+                {filterGroups.map((group) => (
+                  <div key={group._id} style={{ marginBottom: "12px" }}>
+                    <div style={{ fontWeight: 500, marginBottom: "4px" }}>{group.name}</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                      {group.options.map((opt) => (
+                        <label key={opt._id} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <input
+                            type="checkbox"
+                            checked={formData.filterOptions.includes(opt._id)}
+                            onChange={(e) => {
+                              const selected = formData.filterOptions || [];
+                              if (e.target.checked) {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  filterOptions: [...selected, opt._id],
+                                }));
+                              } else {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  filterOptions: selected.filter((id) => id !== opt._id),
+                                }));
+                              }
+                            }}
+                          />
+                          {opt.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Model/Material */}
 
             {/* Model/Material */}
             <div
@@ -1717,6 +1893,94 @@ function CreateProduct() {
                         />
                       </div>
                     </div>
+
+                    {/* Variant images upload */}
+                    <div style={{ marginTop: "12px" }}>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "13px",
+                          fontWeight: "500",
+                          marginBottom: "6px",
+                          color: "#374151",
+                        }}
+                      >
+                        Variant Images (max 3)
+                      </label>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "8px",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        {(variant.images || []).map((img) => (
+                          <div
+                            key={img.id || img.url}
+                            style={{ position: "relative" }}
+                          >
+                            <img
+                              src={img.preview || img.url}
+                              alt="variant"
+                              style={{
+                                width: "60px",
+                                height: "60px",
+                                objectFit: "cover",
+                                borderRadius: "4px",
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeVariantImage(index, img.id)}
+                              style={{
+                                position: "absolute",
+                                top: "-6px",
+                                right: "-6px",
+                                backgroundColor: "#ef4444",
+                                border: "none",
+                                borderRadius: "50%",
+                                color: "white",
+                                width: "20px",
+                                height: "20px",
+                                cursor: "pointer",
+                                fontSize: "12px",
+                                lineHeight: "20px",
+                              }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+
+                        {variant.images?.length < 3 && (
+                          <label
+                            style={{
+                              display: "inline-block",
+                              width: "60px",
+                              height: "60px",
+                              border: "1px dashed #d1d5db",
+                              borderRadius: "4px",
+                              textAlign: "center",
+                              lineHeight: "60px",
+                              cursor: "pointer",
+                              color: "#6b7280",
+                            }}
+                          >
+                            +
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              style={{ display: "none" }}
+                              onChange={(e) =>
+                                handleVariantImageUpload(index, e.target.files)
+                              }
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
                   </div>
                 ))}
               </div>

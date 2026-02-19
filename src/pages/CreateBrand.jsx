@@ -18,7 +18,7 @@ function CreateBrand() {
     try {
       setLoading(true)
       await brandService.createBrand({ name: name.trim() })
-      navigate('/brands/list')
+      navigate('/admin/brands/list')
     } catch (err) {
       setError('Failed to create brand')
     } finally {

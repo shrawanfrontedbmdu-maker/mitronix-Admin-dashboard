@@ -127,10 +127,7 @@ const sidebarLinks = [
     icon: MdNotificationAdd,
     match: "/notifications",
     roles: ["admin"],
-    children: [
-      { label: "Notifications", path: "/notifications" },
-      { label: "Notification Logger", path: "/notification-logger" },
-    ],
+    path:"/notifications"
   },
   {
     label: "Payments",

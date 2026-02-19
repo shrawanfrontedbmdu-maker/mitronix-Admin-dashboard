@@ -11,6 +11,23 @@ export const productService = {
       const variants = productData.variants?.length ? productData.variants : [];
       const isVariantProduct = variants.length > 0;
 
+      // extract files belonging to variant images so we can append later
+      const variantImageFiles = [];
+      // also build sanitized variants copy without file references
+      const sanitizedVariants = variants.map((v, vidx) => {
+        const copy = { ...v };
+        if (copy.images) {
+          copy.images = copy.images.filter((img) => {
+            if (img && img.file) {
+              variantImageFiles.push({ variantIndex: vidx, file: img.file });
+              return false; // remove file from json
+            }
+            return true;
+          });
+        }
+        return copy;
+      });
+
       /* ===== REQUIRED FIELDS ===== */
       const requiredFields = [
         "name",
@@ -30,7 +47,7 @@ export const productService = {
 
       /* ===== VARIANT / NON VARIANT RULE ===== */
       if (isVariantProduct) {
-        formData.append("variants", JSON.stringify(variants));
+        formData.append("variants", JSON.stringify(sanitizedVariants));
       } else {
         if (!productData.sku) throw { message: "sku is required for non-variant product" };
         if (!productData.sellingPrice) throw { message: "sellingPrice is required for non-variant product" };
@@ -46,6 +63,7 @@ export const productService = {
       /* ===== OPTIONAL FIELDS ===== */
       const optionalFields = [
         "slug",
+        "subcategory",
         "brand",
         "modelNumber",
         "metaTitle",
@@ -57,7 +75,7 @@ export const productService = {
       ];
 
       optionalFields.forEach(field => {
-        if (productData[field] !== undefined) {
+        if (productData[field] !== undefined && productData[field] !== null && productData[field] !== "") {
           formData.append(field, productData[field]);
         }
       });
@@ -68,11 +86,12 @@ export const productService = {
         "keyFeatures",
         "dimensions",
         "tags",
-        "keywords"
+        "keywords",
+        "filterOptions"
       ];
 
       jsonFields.forEach(field => {
-        if (productData[field]) {
+        if (productData[field] && productData[field].length > 0) {
           formData.append(field, JSON.stringify(productData[field]));
         }
       });
@@ -84,6 +103,11 @@ export const productService = {
 
       productData.images.forEach(file => {
         formData.append("images", file);
+      });
+
+      // append variant image files after main images
+      variantImageFiles.forEach((vf) => {
+        formData.append(`variantImage_${vf.variantIndex}`, vf.file);
       });
 
       const response = await instance.post("/products", formData, {
@@ -126,9 +150,27 @@ export const productService = {
       const variants = productData.variants?.length ? productData.variants : [];
       const isVariantProduct = variants.length > 0;
 
+      // handle variant image files similar to create
+      const variantImageFiles = [];
+      const sanitizedVariants = variants.map((v, vidx) => {
+        const copy = { ...v };
+        if (copy.images) {
+          copy.images = copy.images.filter((img) => {
+            if (img && img.file) {
+              variantImageFiles.push({ variantIndex: vidx, file: img.file });
+              return false;
+            }
+            return true;
+          });
+        }
+        return copy;
+      });
+
       Object.entries(productData).forEach(([key, value]) => {
         if (value !== undefined && value !== null && key !== "images") {
-          if (Array.isArray(value) || typeof value === "object") {
+          if (key === "variants" && isVariantProduct) {
+            formData.append("variants", JSON.stringify(sanitizedVariants));
+          } else if (Array.isArray(value) || typeof value === "object") {
             formData.append(key, JSON.stringify(value));
           } else {
             formData.append(key, value);
@@ -137,7 +179,6 @@ export const productService = {
       });
 
       if (isVariantProduct) {
-        formData.append("variants", JSON.stringify(variants));
         formData.delete("sku");
         formData.delete("sellingPrice");
         formData.delete("mrp");
@@ -148,6 +189,11 @@ export const productService = {
           formData.append("images", file);
         });
       }
+
+      // append any variant image files
+      variantImageFiles.forEach((vf) => {
+        formData.append(`variantImage_${vf.variantIndex}`, vf.file);
+      });
 
       const res = await instance.put(`/products/${id}`, formData, {
         headers: { "Content-Type": "multipart/form-data" },

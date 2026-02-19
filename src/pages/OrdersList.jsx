@@ -28,6 +28,7 @@ function OrdersList() {
       try {
         setLoading(true)
         const ordersData = await orderService.getOrders()
+        console.log(ordersData)
         setOrders(ordersData || [])
       } catch (error) {
         console.error('Error fetching orders:', error)
@@ -45,6 +46,7 @@ function OrdersList() {
     try {
       setLoading(true)
       const ordersData = await orderService.getOrdersThisMonth()
+      console.log("This month orders data:", ordersData)
       setOrders(ordersData?.data || [])
     } catch (error) {
       console.error('Error fetching orders:', error)
@@ -58,6 +60,7 @@ function OrdersList() {
     try {
       setLoading(true)
       const ordersData = await orderService.getOrdersLastMonth()
+      console.log("Last month orders data:", ordersData)
       setOrders(ordersData?.data || [])
     } catch (error) {
       console.error('Error fetching orders:', error)
@@ -71,6 +74,7 @@ function OrdersList() {
     try {
       setLoading(true)
       const ordersData = await orderService.getOrdersThisYear()
+      console.log("This year orders data:", ordersData)
       setOrders(ordersData?.data || [])
     } catch (error) {
       console.error('Error fetching orders:', error)
@@ -190,17 +194,6 @@ function OrdersList() {
         <div className="page-title-section">
           <h1 className="page-title">ORDERS LIST</h1>
         </div>
-        <div className="page-actions">
-          <select className="time-filter" onChange={handlemonthvalue}>
-            <option value="this-month">This Month</option>
-            <option value="last-month">Last Month</option>
-            <option value="this-year">This Year</option>
-          </select>
-          <Link to="/orders/add" className="btn btn-primary">
-            <MdAdd size={16} />
-            Create Order
-          </Link>
-        </div>
       </div>
 
       {/* Order Statistics Grid */}
@@ -307,10 +300,10 @@ function OrdersList() {
                     <td>
                       <span
                         className={`status-badge ${getStatusBadgeClass(
-                          order.paymentStatus || 'Pending'
+                          order.payment.status
                         )}`}
                       >
-                        {order.paymentStatus || 'Pending'}
+                        {order.payment.status}
                       </span>
                     </td>
                     <td>{order?.length || order.items?.length || 0}</td>
@@ -318,10 +311,10 @@ function OrdersList() {
                     <td>
                       <span
                         className={`status-badge ${getStatusBadgeClass(
-                          order.orderStatus || 'Processing'
+                          order.fulfillment.orderStatus
                         )}`}
                       >
-                        {order.orderStatus || 'Processing'}
+                        {order.fulfillment.orderStatus}
                       </span>
                     </td>
                     <td>

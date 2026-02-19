@@ -88,10 +88,7 @@ const sidebarLinks = [
     icon: MdViewCarousel,
     match: "/banners",
     roles: ["admin"],
-    children: [
-      { label: "All Banners", path: "/banners" },
-      { label: "Delay Banners", path: "/delay-banners" },
-    ],
+    path:"/banners"
   },
   {
     label: "Coupons",

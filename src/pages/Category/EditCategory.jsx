@@ -10,9 +10,16 @@ function EditCategory() {
   // Subcategory state
   const [subcategories, setSubcategories] = useState([]);
   const [newSubcatName, setNewSubcatName] = useState("");
+  const [selectedImageFile, setSelectedImageFile] = useState(null);
   const [subcatLoading, setSubcatLoading] = useState(false);
   const [subcatError, setSubcatError] = useState("");
-  const [editSubcat, setEditSubcat] = useState(null);
+  const [editingSub, setEditingSub] = useState(null);
+  const [subformData, setSubFormData] = useState({
+    name: "",
+    slug: "",
+    description: "",
+    image: "",
+  });
   const { id } = useParams();
   const navigate = useNavigate();
   const mainInputRef = useRef(null);
@@ -84,53 +91,79 @@ function EditCategory() {
     fetchSubcategories();
   }, [id, navigate]);
 
-  // ===== Subcategory Handlers =====
-  const handleAddSubcategory = async () => {
+  const handleSaveSubcategory = async () => {
     if (!newSubcatName.trim()) return;
-    setSubcatLoading(true);
+
     try {
-      // Slug: backend requires slug, so generate from name
-      const slug = newSubcatName
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, "-")
-        .replace(/[^a-z0-9-_]/g, "");
-      const payload = { name: newSubcatName.trim(), slug, category: id };
-      const res = await subcategoryService.createSubcategory(payload);
-      // Backend returns { success, subcategory }
-      if (res && res.subcategory) {
-        setSubcategories((prev) => [...prev, res.subcategory]);
+      console.log("i am called");
+      setSubcatLoading(true);
+
+      const slug = newSubcatName.toLowerCase().replace(/\s+/g, "-").trim();
+
+      const formData = new FormData();
+      formData.append("name", newSubcatName.trim());
+      formData.append("slug", slug);
+      formData.append("category", id);
+      formData.append("description", "");
+
+      if (selectedImageFile) {
+        formData.append("image", selectedImageFile);
+      }
+      for (let pair of formData.entries()) {
+        console.log(pair[0], pair[1]);
+      }
+      console.log(formData);
+      let res;
+
+      if (editingSub) {
+        // 🔥 UPDATE
+        res = await subcategoryService.updateSubcategory(
+          editingSub._id,
+          formData,
+        );
+        console.log("Response from updateSubcategory:", res);
+
+        setSubcategories((prev) =>
+          prev.map((sc) => (sc._id === editingSub._id ? res.subcategory : sc)),
+        );
+
+        setEditingSub(null);
         setNewSubcatName("");
-        setSubcatError("");
+        setSelectedImageFile(null);
       } else {
-        setSubcatError("Failed to add subcategory");
+        // ➕ CREATE
+        res = await subcategoryService.createSubcategory(formData);
+
+        setSubcategories((prev) => [...prev, res.subcategory]);
       }
+
+      setNewSubcatName("");
+      setSelectedImageFile(null);
     } catch (err) {
-      setSubcatError("Failed to add subcategory");
+      setSubcatError(err.response?.data?.message || "Operation failed");
     } finally {
       setSubcatLoading(false);
     }
   };
 
-  const handleDeleteSubcategory = async (subcatId) => {
-    if (!window.confirm("Delete this subcategory?")) return;
-    setSubcatLoading(true);
+  const handleDeleteSubcategory = async (subId) => {
+    if (!window.confirm("Are you sure you want to delete this subcategory?"))
+      return;
+
     try {
-      const res = await subcategoryService.deleteSubcategory(subcatId);
-      // Backend returns { success, message }
-      if (res && res.success) {
-        setSubcategories((prev) => prev.filter((sc) => sc._id !== subcatId));
-        setSubcatError("");
-      } else {
-        setSubcatError("Failed to delete subcategory");
-      }
+      await subcategoryService.deleteSubcategory(subId);
+
+      setSubcategories((prev) => prev.filter((sc) => sc._id !== subId));
     } catch (err) {
-      setSubcatError("Failed to delete subcategory");
-    } finally {
-      setSubcatLoading(false);
+      alert("Failed to delete subcategory");
     }
   };
 
+  const handleEdit = (sub) => {
+    setEditingSub(sub);
+    setNewSubcatName(sub.name);
+    setSelectedImageFile(null); // important
+  };
   // ===== VALIDATION =====
   const validateForm = () => {
     const newErrors = {};
@@ -239,103 +272,6 @@ function EditCategory() {
       setSaving(false);
     }
   };
-
-  // // ===== Loading State =====
-  // if (loading) {
-  //   return (
-  //     <div style={{
-  //       display: 'flex',
-  //       alignItems: 'center',
-  //       justifyContent: 'center',
-  //       minHeight: '100vh',
-  //       backgroundColor: '#f9fafb'
-  //     }}>
-  //       <div style={{
-  //         padding: '32px',
-  //         backgroundColor: 'white',
-  //         borderRadius: '12px',
-  //         boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-  //         textAlign: 'center'
-  //       }}>
-  //         <div style={{
-  //           width: '40px',
-  //           height: '40px',
-  //           border: '4px solid #f3f4f6',
-  //           borderTop: '4px solid #3b82f6',
-  //           borderRadius: '50%',
-  //           animation: 'spin 1s linear infinite',
-  //           margin: '0 auto 16px'
-  //         }}></div>
-  //         <div style={{ fontSize: '16px', fontWeight: '500', color: '#111827' }}>Loading category...</div>
-  //       </div>
-
-  //       {/* SUBCATEGORY MANAGEMENT */}
-  //       <div style={{ margin: '32px 0' }}>
-  //         <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px', color: '#111827' }}>Subcategories</h3>
-  //         {subcatError && <div style={{ color: '#ef4444', marginBottom: 8 }}>{subcatError}</div>}
-  //         {subcatLoading ? (
-  //           <div style={{ color: '#6b7280' }}>Loading subcategories...</div>
-  //         ) : (
-  //           <>
-  //             <ul style={{ padding: 0, margin: 0, listStyle: 'none' }}>
-  //               {subcategories.length === 0 && (
-  //                 <li style={{ color: '#6b7280', fontSize: 14 }}>No subcategories found.</li>
-  //               )}
-  //               {subcategories.map((sc) => (
-  //                 <SubcategoryItem
-  //                   key={sc._id}
-  //                   subcategory={sc}
-  //                   onUpdate={async (updated) => {
-  //                     setSubcatLoading(true);
-  //                     try {
-  //                       const res = await subcategoryService.updateSubcategory(sc._id, updated);
-  //                       if (res && res.success && res.subcategory) {
-  //                         setSubcategories((prev) => prev.map((item) => item._id === sc._id ? res.subcategory : item));
-  //                         setSubcatError("");
-  //                       } else {
-  //                         setSubcatError("Failed to update subcategory");
-  //                       }
-  //                     } catch {
-  //                       setSubcatError("Failed to update subcategory");
-  //                     } finally {
-  //                       setSubcatLoading(false);
-  //                     }
-  //                   }}
-  //                   onDelete={() => handleDeleteSubcategory(sc._id)}
-  //                   loading={subcatLoading}
-  //                 />
-  //               ))}
-  //             </ul>
-  //             <div style={{ display: 'flex', gap: 8, marginTop: 16, alignItems: 'center' }}>
-  //               <input
-  //                 type="text"
-  //                 value={newSubcatName}
-  //                 onChange={e => setNewSubcatName(e.target.value)}
-  //                 placeholder="New subcategory name"
-  //                 style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 14, flex: 1 }}
-  //                 disabled={subcatLoading}
-  //               />
-  //               <button
-  //                 type="button"
-  //                 onClick={handleAddSubcategory}
-  //                 style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: 4, padding: '6px 16px', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}
-  //                 disabled={subcatLoading || !newSubcatName.trim()}
-  //               >Add</button>
-  //             </div>
-  //           </>
-  //         )}
-  //       </div>
-  //       <style>
-  //         {`
-  //           @keyframes spin {
-  //             0% { transform: rotate(0deg); }
-  //             100% { transform: rotate(360deg); }
-  //           }
-  //         `}
-  //       </style>
-  //     </div>
-  //   );
-  // }
 
   return (
     <div
@@ -794,163 +730,145 @@ function EditCategory() {
                 disabled={saving}
               />
             </div>
-            {/* SUBCATEGORY MANAGEMENT */}
-            <div style={{ margin: "32px 0" }}>
+
+            {/* SUBCATEGORIES SECTION */}
+            <div style={{ marginBottom: "24px" }}>
               <h3
                 style={{
-                  fontSize: "18px",
+                  fontSize: "16px",
                   fontWeight: "600",
-                  marginBottom: "12px",
+                  margin: "0 0 16px 0",
                   color: "#111827",
                 }}
               >
                 Subcategories
               </h3>
-              {subcatError && (
-                <div style={{ color: "#ef4444", marginBottom: 8 }}>
+
+              {subcatLoading ? (
+                <p style={{ fontSize: "14px", color: "#6b7280" }}>
+                  Loading subcategories...
+                </p>
+              ) : subcatError ? (
+                <p style={{ fontSize: "14px", color: "#ef4444" }}>
                   {subcatError}
+                </p>
+              ) : subcategories.length === 0 ? (
+                <p style={{ fontSize: "14px", color: "#6b7280" }}>
+                  No subcategories found.
+                </p>
+              ) : (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(200px, 1fr))",
+                    gap: "12px",
+                  }}
+                >
+                  {subcategories.map((sub) => (
+                    <div
+                      key={sub._id}
+                      style={{
+                        border: "1px solid #e5e7eb",
+                        padding: "10px",
+                        borderRadius: "8px",
+                      }}
+                    >
+                      <div style={{ fontWeight: "500" }}>{sub.name}</div>
+
+                      {sub.image && (
+                        <img
+                          src={sub.image}
+                          alt={sub.name}
+                          style={{
+                            width: "80px",
+                            height: "80px",
+                            objectFit: "cover",
+                            marginTop: "8px",
+                            borderRadius: "6px",
+                          }}
+                        />
+                      )}
+
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "6px",
+                          marginTop: "8px",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(sub)}
+                          style={{
+                            backgroundColor: "#3b82f6",
+                            color: "white",
+                            border: "none",
+                            padding: "6px 10px",
+                            borderRadius: "4px",
+                            fontSize: "12px",
+                          }}
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSubcategory(sub._id)}
+                          style={{
+                            backgroundColor: "#ef4444",
+                            color: "white",
+                            border: "none",
+                            padding: "6px 10px",
+                            borderRadius: "4px",
+                            fontSize: "12px",
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
-              <SubcategoryForm
-                key={editSubcat ? editSubcat._id : "new"}
-                mode={editSubcat ? "edit" : "create"}
-                initial={
-                  editSubcat || {
-                    name: "",
-                    slug: "",
-                    description: "",
-                    image: null,
-                  }
-                }
-                onSubmit={async (fields) => {
-                  setSubcatLoading(true);
-                  try {
-                    if (editSubcat) {
-                      // Update
-                      const res = await subcategoryService.updateSubcategory(
-                        editSubcat._id,
-                        fields,
-                      );
-                      if (res && res.success && res.subcategory) {
-                        setSubcategories((prev) =>
-                          prev.map((item) =>
-                            item._id === editSubcat._id
-                              ? res.subcategory
-                              : item,
-                          ),
-                        );
-                        setEditSubcat(null);
-                        setSubcatError("");
-                      } else {
-                        setSubcatError("Failed to update subcategory");
-                      }
-                    } else {
-                      // Create
-                      const res = await subcategoryService.createSubcategory({
-                        name: fields.name,
-                        slug: fields.name.toLowerCase().replace(/\s+/g, "-"),
-                        description: fields.description,
-                        category: id,
-                        image: selectedFile, // optional
-                      });
+            </div>
 
-                      if (res && res.subcategory) {
-                        setSubcategories((prev) => [...prev, res.subcategory]);
-                        setSubcatError("");
-                      } else {
-                        setSubcatError("Failed to add subcategory");
-                      }
-                    }
-                  } catch {
-                    setSubcatError("Failed to save subcategory");
-                  } finally {
-                    setSubcatLoading(false);
-                  }
-                }}
-                onCancel={() => setEditSubcat(null)}
-                loading={subcatLoading}
-              />
-              <ul
+            <div style={{ marginTop: "16px", display: "flex", gap: "8px" }}>
+              <input
+                type="text"
+                value={newSubcatName}
+                onChange={(e) => setNewSubcatName(e.target.value)}
+                placeholder="Enter subcategory name"
                 style={{
-                  padding: 0,
-                  margin: 0,
-                  listStyle: "none",
-                  marginTop: 16,
+                  flex: 1,
+                  padding: "8px 12px",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                }}
+              />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setSelectedImageFile(e.target.files[0])}
+              />
+
+              <button
+                type="button"
+                onClick={handleSaveSubcategory}
+                disabled={subcatLoading}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#3b82f6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  cursor: "pointer",
                 }}
               >
-                {subcategories.length === 0 && (
-                  <li style={{ color: "#6b7280", fontSize: 14 }}>
-                    No subcategories found.
-                  </li>
-                )}
-                {subcategories.map((sc) => (
-                  <li
-                    key={sc._id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 12,
-                      marginBottom: 8,
-                      background: "#f9fafb",
-                      borderRadius: 4,
-                      padding: 8,
-                    }}
-                  >
-                    <img
-                      src={sc.image || "/images/placeholder.png"}
-                      alt="img"
-                      style={{
-                        width: 40,
-                        height: 40,
-                        objectFit: "cover",
-                        borderRadius: 4,
-                        border: "1px solid #e5e7eb",
-                      }}
-                    />
-                    <span style={{ fontSize: 15, minWidth: 100 }}>
-                      {sc.name}
-                    </span>
-                    <span
-                      style={{ fontSize: 13, color: "#6b7280", minWidth: 80 }}
-                    >
-                      {sc.slug}
-                    </span>
-                    <span style={{ fontSize: 13, color: "#6b7280", flex: 1 }}>
-                      {sc.description}
-                    </span>
-                    <button
-                      onClick={() => setEditSubcat(sc)}
-                      disabled={subcatLoading}
-                      style={{
-                        background: "#fbbf24",
-                        color: "white",
-                        border: "none",
-                        borderRadius: 4,
-                        padding: "2px 10px",
-                        fontSize: 13,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteSubcategory(sc._id)}
-                      disabled={subcatLoading}
-                      style={{
-                        background: "#ef4444",
-                        color: "white",
-                        border: "none",
-                        borderRadius: 4,
-                        padding: "2px 10px",
-                        fontSize: 13,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                {editingSub ? "Update Subcategory" : "Add Subcategory"}
+              </button>
             </div>
 
             {/* ACTIONS */}
@@ -965,7 +883,7 @@ function EditCategory() {
             >
               <button
                 type="button"
-                onClick={() => navigate("/categories")}
+                onClick={() => navigate("/admin/categories")}
                 disabled={saving}
                 style={{
                   display: "flex",
@@ -1040,317 +958,3 @@ function EditCategory() {
 }
 
 export default EditCategory;
-
-// SubcategoryItem component for inline edit
-function SubcategoryItem({ subcategory, onUpdate, onDelete, loading }) {
-  const [editMode, setEditMode] = useState(false);
-  const [name, setName] = useState(subcategory.name);
-  const [description, setDescription] = useState(subcategory.description || "");
-  const [slug, setSlug] = useState(subcategory.slug);
-
-  const handleSave = () => {
-    if (!name.trim() || !slug.trim()) return;
-    onUpdate({ name: name.trim(), slug: slug.trim(), description });
-    setEditMode(false);
-  };
-
-  return (
-    <li
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        marginBottom: 8,
-        background: editMode ? "#f3f4f6" : "transparent",
-        borderRadius: 4,
-        padding: 4,
-      }}
-    >
-      {editMode ? (
-        <>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            style={{
-              fontSize: 15,
-              padding: "2px 6px",
-              border: "1px solid #d1d5db",
-              borderRadius: 4,
-            }}
-            disabled={loading}
-          />
-          <input
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            style={{
-              fontSize: 13,
-              padding: "2px 6px",
-              border: "1px solid #d1d5db",
-              borderRadius: 4,
-              width: 100,
-            }}
-            disabled={loading}
-          />
-          <input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            style={{
-              fontSize: 13,
-              padding: "2px 6px",
-              border: "1px solid #d1d5db",
-              borderRadius: 4,
-              flex: 1,
-            }}
-            placeholder="Description"
-            disabled={loading}
-          />
-          <button
-            onClick={handleSave}
-            disabled={loading || !name.trim() || !slug.trim()}
-            style={{
-              background: "#22c55e",
-              color: "white",
-              border: "none",
-              borderRadius: 4,
-              padding: "2px 10px",
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
-            Save
-          </button>
-          <button
-            onClick={() => setEditMode(false)}
-            disabled={loading}
-            style={{
-              background: "#f3f4f6",
-              color: "#374151",
-              border: "none",
-              borderRadius: 4,
-              padding: "2px 10px",
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
-            Cancel
-          </button>
-        </>
-      ) : (
-        <>
-          <span style={{ fontSize: 15, minWidth: 100 }}>
-            {subcategory.name}
-          </span>
-          <span style={{ fontSize: 13, color: "#6b7280", minWidth: 80 }}>
-            {subcategory.slug}
-          </span>
-          <span style={{ fontSize: 13, color: "#6b7280", flex: 1 }}>
-            {subcategory.description}
-          </span>
-          <button
-            onClick={() => setEditMode(true)}
-            disabled={loading}
-            style={{
-              background: "#fbbf24",
-              color: "white",
-              border: "none",
-              borderRadius: 4,
-              padding: "2px 10px",
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
-            Edit
-          </button>
-          <button
-            onClick={onDelete}
-            disabled={loading}
-            style={{
-              background: "#ef4444",
-              color: "white",
-              border: "none",
-              borderRadius: 4,
-              padding: "2px 10px",
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
-            Delete
-          </button>
-        </>
-      )}
-    </li>
-  );
-}
-
-// SubcategoryForm component for create/edit
-function SubcategoryForm({ mode, initial, onSubmit, onCancel, loading }) {
-  const [name, setName] = useState(initial.name || "");
-  const [slug, setSlug] = useState(initial.slug || "");
-  const [description, setDescription] = useState(initial.description || "");
-  const [image, setImage] = useState(initial.image || null);
-  const [imageFile, setImageFile] = useState(null);
-
-  useEffect(() => {
-    setName(initial.name || "");
-    setSlug(initial.slug || "");
-    setDescription(initial.description || "");
-    setImage(initial.image || null);
-    setImageFile(null);
-  }, [initial]);
-
-  const handleImageChange = (file) => {
-    if (!file) return;
-    if (!file.type.startsWith("image/"))
-      return alert("Please select a valid image file");
-    if (file.size > 2 * 1024 * 1024)
-      return alert("Image size must be less than 2MB");
-    setImageFile(file);
-    setImage(URL.createObjectURL(file));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!name.trim() || !slug.trim()) return;
-    let payload = {
-      name: name.trim(),
-      slug: slug.trim(),
-      description: description.trim(),
-    };
-    if (imageFile) {
-      // Upload image to backend or cloud, here just send as base64 for demo
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        payload.image = reader.result;
-        onSubmit(payload);
-      };
-      reader.readAsDataURL(imageFile);
-      return;
-    }
-    if (image && !imageFile) payload.image = image;
-    onSubmit(payload);
-  };
-
-  return (
-    <form
-      onSubmit={handleSubmit}
-      style={{
-        display: "flex",
-        gap: 8,
-        alignItems: "center",
-        marginBottom: 16,
-        background: "#fff",
-        borderRadius: 4,
-        padding: 8,
-        boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-      }}
-    >
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => {
-          setName(e.target.value);
-          setSlug(
-            e.target.value
-              .toLowerCase()
-              .replace(/\s+/g, "-")
-              .replace(/[^a-z0-9-_]/g, ""),
-          );
-        }}
-        placeholder="Name"
-        style={{
-          padding: "6px 10px",
-          border: "1px solid #d1d5db",
-          borderRadius: 4,
-          fontSize: 14,
-          width: 120,
-        }}
-        disabled={loading}
-        required
-      />
-      <input
-        type="text"
-        value={slug}
-        onChange={(e) => setSlug(e.target.value)}
-        placeholder="Slug"
-        style={{
-          padding: "6px 10px",
-          border: "1px solid #d1d5db",
-          borderRadius: 4,
-          fontSize: 14,
-          width: 100,
-        }}
-        disabled={loading}
-        required
-      />
-      <input
-        type="text"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        placeholder="Description"
-        style={{
-          padding: "6px 10px",
-          border: "1px solid #d1d5db",
-          borderRadius: 4,
-          fontSize: 14,
-          flex: 1,
-        }}
-        disabled={loading}
-      />
-      <input
-        type="file"
-        accept="image/*"
-        onChange={(e) => handleImageChange(e.target.files[0])}
-        disabled={loading}
-        style={{ width: 120 }}
-      />
-      {image && (
-        <img
-          src={image}
-          alt="img"
-          style={{
-            width: 32,
-            height: 32,
-            objectFit: "cover",
-            borderRadius: 4,
-            border: "1px solid #e5e7eb",
-          }}
-        />
-      )}
-      <button
-        type="submit"
-        disabled={loading || !name.trim() || !slug.trim()}
-        style={{
-          background: "#3b82f6",
-          color: "white",
-          border: "none",
-          borderRadius: 4,
-          padding: "6px 16px",
-          fontSize: 14,
-          fontWeight: 500,
-          cursor: "pointer",
-        }}
-      >
-        {mode === "edit" ? "Update" : "Add"}
-      </button>
-      {mode === "edit" && (
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={loading}
-          style={{
-            background: "#f3f4f6",
-            color: "#374151",
-            border: "none",
-            borderRadius: 4,
-            padding: "6px 16px",
-            fontSize: 14,
-            fontWeight: 500,
-            cursor: "pointer",
-          }}
-        >
-          Cancel
-        </button>
-      )}
-    </form>
-  );
-}

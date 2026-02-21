@@ -1,6 +1,9 @@
 import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
+const axiosInstance = axios.create({
+  baseURL: API_BASE,
+});
 
 export const subcategoryService = {
 
@@ -8,55 +11,32 @@ export const subcategoryService = {
     const res = await axios.get(
       `${API_BASE}/subcategory?category=${categoryId}`
     );
+    console.log(res.data.subcategories)
     return res.data.subcategories;
   },
-
   async createSubcategory(data) {
-    let payload = data;
-
-    // Send as JSON (no image upload)
-    const res = await axios.post(
-      `${API_BASE}/subcategory`,
-      payload
+    const response = await axiosInstance.post(
+      `/subcategory`,
+      data,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
     );
-    return res.data;
+    return response.data;
   },
 
   async updateSubcategory(id, data) {
-    let payload;
-
-    if (data.image) {
-      payload = new FormData();
-
-      Object.keys(data).forEach((key) => {
-        if (data[key] !== undefined && data[key] !== null) {
-          payload.append(key, data[key]);
-        }
-      });
-
-      const res = await axios.put(
-        `${API_BASE}/subcategory/${id}`,
-        payload,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        }
-      );
-
-      return res.data;
-    }
-
-    const res = await axios.put(
-      `${API_BASE}/subcategory/${id}`,
-      data
+    const response = await axiosInstance.put(
+      `/subcategory/${id}`,
+      data,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
     );
-
-    return res.data;
-  },
-
-  async deleteSubcategory(id) {
-    const res = await axios.delete(
-      `${API_BASE}/subcategory/${id}`
-    );
-    return res.data;
-  },
+    return response.data;
+  }
 };

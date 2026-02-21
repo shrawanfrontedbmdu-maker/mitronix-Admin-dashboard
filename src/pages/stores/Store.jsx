@@ -144,7 +144,7 @@ export default function Store() {
           </p>
         </div>
         <Link
-          to="/store/create"
+          to="/admin/stores/create"
           className="btn btn-primary"
           style={{
             display: "flex",

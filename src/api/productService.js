@@ -8,19 +8,16 @@ export const productService = {
     try {
       const formData = new FormData();
 
-      const variants = productData.variants?.length ? productData.variants : [];
-      const isVariantProduct = variants.length > 0;
-
+      const variants = productData.variants || [];
       // extract files belonging to variant images so we can append later
       const variantImageFiles = [];
-      // also build sanitized variants copy without file references
       const sanitizedVariants = variants.map((v, vidx) => {
         const copy = { ...v };
         if (copy.images) {
           copy.images = copy.images.filter((img) => {
             if (img && img.file) {
               variantImageFiles.push({ variantIndex: vidx, file: img.file });
-              return false; // remove file from json
+              return false;
             }
             return true;
           });
@@ -35,43 +32,33 @@ export const productService = {
         "description",
         "category",
         "warranty",
-        "returnPolicy"
+        "returnPolicy",
       ];
 
-      requiredFields.forEach(field => {
+      requiredFields.forEach((field) => {
         if (!productData[field]) {
           throw { message: `${field} is required` };
         }
         formData.append(field, productData[field]);
       });
 
-      /* ===== VARIANT / NON VARIANT RULE ===== */
-      if (isVariantProduct) {
-        formData.append("variants", JSON.stringify(sanitizedVariants));
-      } else {
-        if (!productData.sku) throw { message: "sku is required for non-variant product" };
-        if (!productData.sellingPrice) throw { message: "sellingPrice is required for non-variant product" };
-
-        formData.append("sku", productData.sku);
-        formData.append("sellingPrice", productData.sellingPrice);
-
-        if (productData.mrp) formData.append("mrp", productData.mrp);
-        if (productData.stockQuantity !== undefined)
-          formData.append("stockQuantity", productData.stockQuantity);
+      /* ===== VARIANTS ===== */
+      if (sanitizedVariants.length === 0) {
+        throw { message: "At least one variant is required" };
       }
+      formData.append("variants", JSON.stringify(sanitizedVariants));
 
       /* ===== OPTIONAL FIELDS ===== */
       const optionalFields = [
         "slug",
         "subcategory",
         "brand",
-        "modelNumber",
         "metaTitle",
         "metaDescription",
         "status",
         "isFeatured",
         "isRecommended",
-        "isDigital"
+        "isDigital",
       ];
 
       optionalFields.forEach(field => {
@@ -84,12 +71,10 @@ export const productService = {
       const jsonFields = [
         "specifications",
         "keyFeatures",
-        "dimensions",
         "tags",
         "keywords",
-        "filterOptions"
+        "filterOptions",
       ];
-
       jsonFields.forEach(field => {
         if (productData[field] && productData[field].length > 0) {
           formData.append(field, JSON.stringify(productData[field]));

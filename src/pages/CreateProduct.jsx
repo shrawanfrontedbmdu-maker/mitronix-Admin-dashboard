@@ -20,27 +20,9 @@ function CreateProduct() {
     subcategory: "",
     filterOptions: [],
     brand: "",
-    modelNumber: "",
-    mrp: "",
-    sellingPrice: "",
-    costPrice: "",
-    currency: "INR",
-    sku: "",
-    stockQuantity: 0,
-    stockStatus: "in-stock",
-    lowStockThreshold: 5,
-    allowBackorder: false,
-    reservedQuantity: 0,
     specifications: [],
     keyFeatures: [],
     variants: [],
-    dimensions: {
-      weight: "",
-      length: "",
-      width: "",
-      height: "",
-      unit: "cm",
-    },
     warranty: "",
     returnPolicy: "",
     isRecommended: false,
@@ -51,7 +33,6 @@ function CreateProduct() {
     metaDescription: "",
     keywords: [],
     tags: [],
-    relatedProducts: [],
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -63,7 +44,6 @@ function CreateProduct() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [priceValidationMessage, setPriceValidationMessage] = useState("");
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -102,19 +82,12 @@ function CreateProduct() {
       .replace(/^-+|-+$/g, "");
   };
 
-  const validatePricing = (sellingPrice, mrp) => {
-    if (sellingPrice && mrp && parseFloat(sellingPrice) > parseFloat(mrp)) {
-      setPriceValidationMessage("⚠️ Selling price cannot be higher than MRP");
-    } else {
-      setPriceValidationMessage("");
-    }
-  };
-
   // fetch subcategories for chosen category
   const loadSubcategories = async (categoryId) => {
     if (!categoryId) return;
     try {
-      const data = await subcategoryService.getSubcategoriesByCategory(categoryId);
+      const data =
+        await subcategoryService.getSubcategoriesByCategory(categoryId);
       setSubcategories(data || []);
     } catch (err) {
       console.error("Failed to load subcategories", err);
@@ -126,7 +99,7 @@ function CreateProduct() {
     if (!categoryId) return;
     try {
       const groups = await filterService.getFilterGroupsByCategory(categoryId);
-      console.log(groups)
+      console.log(groups);
       setFilterGroups(groups || []);
     } catch (err) {
       console.error("Failed to load filter groups", err);
@@ -146,12 +119,6 @@ function CreateProduct() {
 
       const newData = { ...prev, [name]: val };
       if (name === "name") newData.slug = generateSlug(val);
-      if (name === "sellingPrice" || name === "mrp") {
-        const currentPrice =
-          name === "sellingPrice" ? val : newData.sellingPrice;
-        const currentMrp = name === "mrp" ? val : newData.mrp;
-        validatePricing(currentPrice, currentMrp);
-      }
 
       // when category changes, reset dependent values and reload lists
       if (name === "category") {
@@ -204,6 +171,70 @@ function CreateProduct() {
     setFormData((prev) => ({ ...prev, keyFeatures: updated }));
   };
 
+  const addVariantSpecification = (variantIndex) => {
+    const updatedVariants = [...formData.variants];
+
+    updatedVariants[variantIndex].specifications.push({
+      key: "",
+      value: "",
+    });
+
+    setFormData({ ...formData, variants: updatedVariants });
+  };
+
+  const handleVariantSpecificationChange = (
+    variantIndex,
+    specIndex,
+    field,
+    value,
+  ) => {
+    const updatedVariants = [...formData.variants];
+
+    updatedVariants[variantIndex].specifications[specIndex][field] = value;
+
+    setFormData({ ...formData, variants: updatedVariants });
+  };
+
+  const removeVariantSpecification = (variantIndex, specIndex) => {
+    const updatedVariants = [...formData.variants];
+
+    updatedVariants[variantIndex].specifications.splice(specIndex, 1);
+
+    setFormData({ ...formData, variants: updatedVariants });
+  };
+
+  const addVariantKeyFeature = (variantIndex) => {
+    const updatedVariants = [...formData.variants];
+
+    updatedVariants[variantIndex].keyFeatures.push({
+      key: "",
+      value: "",
+    });
+
+    setFormData({ ...formData, variants: updatedVariants });
+  };
+
+  const handleVariantKeyFeatureChange = (
+    variantIndex,
+    featureIndex,
+    field,
+    value,
+  ) => {
+    const updatedVariants = [...formData.variants];
+
+    updatedVariants[variantIndex].keyFeatures[featureIndex][field] = value;
+
+    setFormData({ ...formData, variants: updatedVariants });
+  };
+
+  const removeVariantKeyFeature = (variantIndex, featureIndex) => {
+    const updatedVariants = [...formData.variants];
+
+    updatedVariants[variantIndex].keyFeatures.splice(featureIndex, 1);
+
+    setFormData({ ...formData, variants: updatedVariants });
+  };
+
   const handleVariantChange = (index, field, value) => {
     const updatedVariants = [...formData.variants];
     if (field.includes(".")) {
@@ -223,10 +254,11 @@ function CreateProduct() {
         {
           sku: "",
           price: 0,
-          stockQuantity: 0,
+          mrp: 0,
           attributes: { color: "", size: "", model: "" },
           images: [],
           specifications: [],
+          keyFeatures: [],
           isActive: true,
         },
       ],
@@ -315,7 +347,9 @@ function CreateProduct() {
     if (removed && removed.preview) {
       URL.revokeObjectURL(removed.preview);
     }
-    updated[variantIndex].images = imagesArr.filter((img) => img.id !== imageId);
+    updated[variantIndex].images = imagesArr.filter(
+      (img) => img.id !== imageId,
+    );
     setFormData((prev) => ({ ...prev, variants: updated }));
   };
   const handleFileSelect = (e) => handleImageUpload(e.target.files);
@@ -359,15 +393,6 @@ function CreateProduct() {
         return;
       }
 
-      if (
-        formData.mrp &&
-        formData.sellingPrice &&
-        parseFloat(formData.sellingPrice) > parseFloat(formData.mrp)
-      ) {
-        setError("Selling price cannot be higher than MRP");
-        return;
-      }
-
       if (images.length === 0) {
         setError("Upload at least one product image");
         return;
@@ -377,19 +402,11 @@ function CreateProduct() {
       const slug = generateSlug(formData.name);
       const productKey = formData.productKey || slug + "-" + Date.now();
 
-      const cleanedVariants = formData.variants.filter(
-        (v) =>
-          v.sku ||
-          v.attributes.color ||
-          v.attributes.size ||
-          v.price ||
-          v.stockQuantity,
-      );
-
-      const mainProductSKU =
-        cleanedVariants.length === 0
-          ? formData.sku || `${productKey}-main-${Date.now()}`
-          : undefined;
+      const cleanedVariants = formData.variants.filter((v) => v.sku || v.price);
+      if (cleanedVariants.length === 0) {
+        setError("At least one variant is required");
+        return;
+      }
 
       const productData = {
         name: formData.name,
@@ -400,63 +417,27 @@ function CreateProduct() {
         subcategory: formData.subcategory || undefined,
         filterOptions: formData.filterOptions || [],
         brand: formData.brand || undefined,
-        modelNumber: formData.modelNumber || undefined,
-        mrp:
-          cleanedVariants.length === 0 && formData.mrp
-            ? parseFloat(formData.mrp)
-            : undefined,
-        sellingPrice:
-          cleanedVariants.length === 0 && formData.sellingPrice
-            ? parseFloat(formData.sellingPrice)
-            : undefined,
-        costPrice: formData.costPrice
-          ? parseFloat(formData.costPrice)
-          : undefined,
-        currency: formData.currency,
-        sku: mainProductSKU,
-        stockQuantity: formData.stockQuantity
-          ? parseInt(formData.stockQuantity)
-          : 0,
-        stockStatus: formData.stockStatus,
-        lowStockThreshold: formData.lowStockThreshold
-          ? parseInt(formData.lowStockThreshold)
-          : 5,
-        allowBackorder: formData.allowBackorder,
-        reservedQuantity: formData.reservedQuantity
-          ? parseInt(formData.reservedQuantity)
-          : 0,
         specifications: formData.specifications.filter((s) => s.key || s.value),
         keyFeatures: formData.keyFeatures.filter((kf) => kf.key || kf.value),
         variants: cleanedVariants.map((v) => ({
           sku:
             v.sku ||
-            `${productKey}-${v.attributes.color || "NA"}-${v.attributes.size || "NA"}-${Date.now()}`,
+            `${productKey}-${v.attributes?.color || "NA"}-${
+              v.attributes?.size || "NA"
+            }-${Date.now()}`,
           price: v.price ? parseFloat(v.price) : 0,
-          stockQuantity: v.stockQuantity ? parseInt(v.stockQuantity) : 0,
+          mrp: v.mrp ? parseFloat(v.mrp) : undefined,
+          currency: v.currency || "INR",
           attributes: {
-            color: v.attributes.color || undefined,
-            size: v.attributes.size || undefined,
-            model: v.attributes.model || undefined,
+            color: v.attributes?.color || undefined,
+            size: v.attributes?.size || undefined,
+            model: v.attributes?.model || undefined,
           },
           images: v.images || [],
           specifications: v.specifications || [],
+          keyFeatures: v.keyFeatures || [],
           isActive: v.isActive !== undefined ? v.isActive : true,
         })),
-        dimensions: {
-          weight: formData.dimensions.weight
-            ? parseFloat(formData.dimensions.weight)
-            : undefined,
-          length: formData.dimensions.length
-            ? parseFloat(formData.dimensions.length)
-            : undefined,
-          width: formData.dimensions.width
-            ? parseFloat(formData.dimensions.width)
-            : undefined,
-          height: formData.dimensions.height
-            ? parseFloat(formData.dimensions.height)
-            : undefined,
-          unit: formData.dimensions.unit || "cm",
-        },
         warranty: formData.warranty,
         returnPolicy: formData.returnPolicy,
         isRecommended: !!formData.isRecommended,
@@ -467,14 +448,9 @@ function CreateProduct() {
         metaDescription: formData.metaDescription || undefined,
         keywords: formData.keywords.length > 0 ? formData.keywords : undefined,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
-        relatedProducts:
-          formData.relatedProducts.length > 0
-            ? formData.relatedProducts
-            : undefined,
         images: images.map((img) => img.file),
       };
 
-      console.log("Submitting product data:", productData);
       const result = await productService.createProduct(productData);
       setSuccess("Product created successfully!");
       images.forEach((img) => URL.revokeObjectURL(img.preview));
@@ -828,11 +804,11 @@ function CreateProduct() {
               />
             </div>
 
-            {/* URL Slug/SKU */}
+            {/* URL Slug/SEO */}
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr",
+                gridTemplateColumns: "1fr",
                 gap: "16px",
                 marginBottom: "24px",
               }}
@@ -856,37 +832,6 @@ function CreateProduct() {
                   onChange={handleInputChange}
                   required
                   disabled={loading}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  SKU*
-                </label>
-                <input
-                  type="text"
-                  name="sku"
-                  value={formData.sku}
-                  onChange={handleInputChange}
-                  disabled={loading}
-                  placeholder="Leave empty if using variants"
                   style={{
                     width: "100%",
                     padding: "10px 12px",
@@ -1021,15 +966,32 @@ function CreateProduct() {
             {/* Filter groups/options section */}
             {filterGroups.length > 0 && (
               <div style={{ marginBottom: "24px" }}>
-                <h4 style={{ fontSize: "16px", fontWeight: "600", marginBottom: "8px" }}>
+                <h4
+                  style={{
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    marginBottom: "8px",
+                  }}
+                >
                   Filter Options
                 </h4>
                 {filterGroups.map((group) => (
                   <div key={group._id} style={{ marginBottom: "12px" }}>
-                    <div style={{ fontWeight: 500, marginBottom: "4px" }}>{group.name}</div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                    <div style={{ fontWeight: 500, marginBottom: "4px" }}>
+                      {group.name}
+                    </div>
+                    <div
+                      style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}
+                    >
                       {group.options.map((opt) => (
-                        <label key={opt._id} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                        <label
+                          key={opt._id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
                           <input
                             type="checkbox"
                             checked={formData.filterOptions.includes(opt._id)}
@@ -1043,7 +1005,9 @@ function CreateProduct() {
                               } else {
                                 setFormData((prev) => ({
                                   ...prev,
-                                  filterOptions: selected.filter((id) => id !== opt._id),
+                                  filterOptions: selected.filter(
+                                    (id) => id !== opt._id,
+                                  ),
                                 }));
                               }
                             }}
@@ -1057,77 +1021,37 @@ function CreateProduct() {
               </div>
             )}
 
-            {/* Model/Material */}
-
-            {/* Model/Material */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "16px",
-                marginBottom: "24px",
-              }}
-            >
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Model Number (Optional)
-                </label>
-                <input
-                  type="text"
-                  name="modelNumber"
-                  value={formData.modelNumber}
-                  onChange={handleInputChange}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Product Key*
-                </label>
-                <input
-                  type="text"
-                  name="productKey"
-                  value={formData.productKey}
-                  onChange={handleInputChange}
-                  required
-                  disabled={loading}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
+            {/* Product Key */}
+            <div style={{ marginBottom: "24px" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  marginBottom: "8px",
+                  color: "#374151",
+                }}
+              >
+                Product Key*
+              </label>
+              <input
+                type="text"
+                name="productKey"
+                value={formData.productKey}
+                onChange={handleInputChange}
+                required
+                disabled={loading}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  outline: "none",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+              />
             </div>
 
             {/* Status/Select Material */}
@@ -1362,9 +1286,7 @@ function CreateProduct() {
                     fontWeight: "500",
                     color: "#374151",
                   }}
-                >
-
-                </label>
+                ></label>
                 <button
                   type="button"
                   onClick={addSpecification}
@@ -1747,7 +1669,6 @@ function CreateProduct() {
                               e.target.value,
                             )
                           }
-                          placeholder="S, M, L"
                           style={{
                             width: "100%",
                             padding: "8px 10px",
@@ -1792,6 +1713,7 @@ function CreateProduct() {
                         />
                       </div>
                     </div>
+                    {/* Pricing Section */}
                     <div
                       style={{
                         display: "grid",
@@ -1801,24 +1723,13 @@ function CreateProduct() {
                       }}
                     >
                       <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: "500",
-                            marginBottom: "6px",
-                            color: "#374151",
-                          }}
-                        >
-                          SKU
-                        </label>
+                        <label>SKU</label>
                         <input
                           type="text"
                           value={variant.sku}
                           onChange={(e) =>
                             handleVariantChange(index, "sku", e.target.value)
                           }
-                          placeholder="Variant SKU"
                           style={{
                             width: "100%",
                             padding: "8px 10px",
@@ -1829,26 +1740,19 @@ function CreateProduct() {
                           }}
                         />
                       </div>
+
                       <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: "500",
-                            marginBottom: "6px",
-                            color: "#374151",
-                          }}
-                        >
-                          Price
-                        </label>
+                        <label>Price</label>
                         <input
                           type="number"
                           value={variant.price}
                           onChange={(e) =>
-                            handleVariantChange(index, "price", e.target.value)
+                            handleVariantChange(
+                              index,
+                              "price",
+                              Number(e.target.value),
+                            )
                           }
-                          placeholder="0.00"
-                          step="0.01"
                           style={{
                             width: "100%",
                             padding: "8px 10px",
@@ -1859,18 +1763,32 @@ function CreateProduct() {
                           }}
                         />
                       </div>
+
                       <div>
-                        <label
+                        <label>MRP</label>
+                        <input
+                          type="number"
+                          value={variant.mrp}
+                          onChange={(e) =>
+                            handleVariantChange(
+                              index,
+                              "mrp",
+                              Number(e.target.value),
+                            )
+                          }
                           style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: "500",
-                            marginBottom: "6px",
-                            color: "#374151",
+                            width: "100%",
+                            padding: "8px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            outline: "none",
                           }}
-                        >
-                          Stock
-                        </label>
+                        />
+                      </div>
+
+                      <div>
+                        <label>Stock Quantity*</label>
                         <input
                           type="number"
                           value={variant.stockQuantity}
@@ -1878,10 +1796,132 @@ function CreateProduct() {
                             handleVariantChange(
                               index,
                               "stockQuantity",
+                              Number(e.target.value),
+                            )
+                          }
+                          required
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            outline: "none",
+                          }}
+                        />
+                      </div>
+
+                      <div>
+                        <label>Currency</label>
+                        <select
+                          value={variant.currency}
+                          onChange={(e) =>
+                            handleVariantChange(
+                              index,
+                              "currency",
                               e.target.value,
                             )
                           }
-                          placeholder="0"
+                          style={{
+                            width: "100%",
+                            padding: "10px 12px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "8px",
+                            fontSize: "14px",
+                            outline: "none",
+                            backgroundColor: "white",
+                          }}
+                        >
+                          <option value="INR">INR</option>
+                          <option value="USD">USD</option>
+                        </select>
+                      </div>
+                    </div>
+                    {/* Dimensions */}
+                    <div style={{ marginTop: "16px" }}>
+                      <h5 style={{ marginBottom: "8px" }}>Dimensions</h5>
+
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr 1fr 1fr",
+                          gap: "12px",
+                        }}
+                      >
+                        <input
+                          type="number"
+                          placeholder="Weight"
+                          value={variant.dimensions?.weight || ""}
+                          onChange={(e) =>
+                            handleVariantChange(
+                              index,
+                              "dimensions.weight",
+                              Number(e.target.value),
+                            )
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            outline: "none",
+                          }}
+                        />
+
+                        <input
+                          type="number"
+                          placeholder="Length"
+                          value={variant.dimensions?.length || ""}
+                          onChange={(e) =>
+                            handleVariantChange(
+                              index,
+                              "dimensions.length",
+                              Number(e.target.value),
+                            )
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            outline: "none",
+                          }}
+                        />
+
+                        <input
+                          type="number"
+                          placeholder="Width"
+                          value={variant.dimensions?.width || ""}
+                          onChange={(e) =>
+                            handleVariantChange(
+                              index,
+                              "dimensions.width",
+                              Number(e.target.value),
+                            )
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            outline: "none",
+                          }}
+                        />
+
+                        <input
+                          type="number"
+                          placeholder="Height"
+                          value={variant.dimensions?.height || ""}
+                          onChange={(e) =>
+                            handleVariantChange(
+                              index,
+                              "dimensions.height",
+                              Number(e.target.value),
+                            )
+                          }
                           style={{
                             width: "100%",
                             padding: "8px 10px",
@@ -1893,6 +1933,123 @@ function CreateProduct() {
                         />
                       </div>
                     </div>
+                    {/* ===== SPECIFICATIONS ===== */}
+                    <h4>Specifications</h4>
+
+                    {variant.specifications.map((spec, specIndex) => (
+                      <div
+                        key={specIndex}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: "12px",
+                        }}
+                      >
+                        <input
+                          type="text"
+                          placeholder="Key"
+                          value={spec.key}
+                          onChange={(e) =>
+                            handleVariantSpecificationChange(
+                              index,
+                              specIndex,
+                              "key",
+                              e.target.value,
+                            )
+                          }
+                        />
+
+                        <input
+                          type="text"
+                          placeholder="Value"
+                          value={spec.value}
+                          onChange={(e) =>
+                            handleVariantSpecificationChange(
+                              index,
+                              specIndex,
+                              "value",
+                              e.target.value,
+                            )
+                          }
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeVariantSpecification(index, specIndex)
+                          }
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={() => addVariantSpecification(index)}
+                    >
+                      + Add Specification
+                    </button>
+
+                    {/* ===== KEY FEATURES ===== */}
+                    <h4>Key Features</h4>
+
+                    {variant.keyFeatures.map((feature, featureIndex) => (
+                      <div
+                        key={featureIndex}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: "12px",
+                        }}
+                      >
+                        <input
+                          type="text"
+                          placeholder="Feature"
+                          value={feature.key}
+                          onChange={(e) =>
+                            handleVariantKeyFeatureChange(
+                              index,
+                              featureIndex,
+                              "key",
+                              e.target.value,
+                            )
+                          }
+                        />
+
+                        <input
+                          type="text"
+                          placeholder="Value"
+                          value={feature.value}
+                          onChange={(e) =>
+                            handleVariantKeyFeatureChange(
+                              index,
+                              featureIndex,
+                              "value",
+                              e.target.value,
+                            )
+                          }
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeVariantKeyFeature(index, featureIndex)
+                          }
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={() => addVariantKeyFeature(index)}
+                    >
+                      + Add Feature
+                    </button>
 
                     {/* Variant images upload */}
                     <div style={{ marginTop: "12px" }}>
@@ -1980,7 +2137,6 @@ function CreateProduct() {
                         )}
                       </div>
                     </div>
-
                   </div>
                 ))}
               </div>
@@ -2003,368 +2159,93 @@ function CreateProduct() {
             >
               + Add Variant
             </button>
+          </div>
 
-            {/* Pricing (if no variants) */}
-            {formData.variants.length === 0 && (
-              <div style={{ marginBottom: "32px" }}>
-                <h3
-                  style={{
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    marginBottom: "16px",
-                    color: "#111827",
-                  }}
-                >
-                  Pricing Details
-                </h3>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr 1fr",
-                    gap: "16px",
-                  }}
-                >
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        marginBottom: "8px",
-                        color: "#374151",
-                      }}
-                    >
-                      MRP (₹)
-                    </label>
-                    <input
-                      type="number"
-                      name="mrp"
-                      value={formData.mrp}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                      }}
-                      onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                      onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                    />
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        marginBottom: "8px",
-                        color: "#374151",
-                      }}
-                    >
-                      Selling Price (₹)
-                    </label>
-                    <input
-                      type="number"
-                      name="sellingPrice"
-                      value={formData.sellingPrice}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        border: priceValidationMessage
-                          ? "1px solid #ef4444"
-                          : "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                      }}
-                      onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                      onBlur={(e) =>
-                        (e.target.style.borderColor = priceValidationMessage
-                          ? "#ef4444"
-                          : "#d1d5db")
-                      }
-                    />
-                    {priceValidationMessage && (
-                      <div
-                        style={{
-                          fontSize: "13px",
-                          color: "#ef4444",
-                          marginTop: "4px",
-                        }}
-                      >
-                        {priceValidationMessage}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        marginBottom: "8px",
-                        color: "#374151",
-                      }}
-                    >
-                      Cost Price (₹)
-                    </label>
-                    <input
-                      type="number"
-                      name="costPrice"
-                      value={formData.costPrice}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                      }}
-                      onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                      onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Stock & Dimensions */}
-            <div
+          {/* Checkboxes */}
+          <div
+            style={{
+              marginBottom: "32px",
+              display: "flex",
+              gap: "24px",
+              flexWrap: "wrap",
+            }}
+          >
+            <label
               style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr 1fr",
-                gap: "16px",
-                marginBottom: "32px",
-              }}
-            >
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Stock Quantity
-                </label>
-                <input
-                  type="number"
-                  name="stockQuantity"
-                  value={formData.stockQuantity}
-                  onChange={handleInputChange}
-                  min="0"
-                  placeholder="0"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Weight (kg)
-                </label>
-                <input
-                  type="number"
-                  name="dimensions.weight"
-                  value={formData.dimensions.weight}
-                  onChange={handleInputChange}
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Length (cm)
-                </label>
-                <input
-                  type="number"
-                  name="dimensions.length"
-                  value={formData.dimensions.length}
-                  onChange={handleInputChange}
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Width (cm)
-                </label>
-                <input
-                  type="number"
-                  name="dimensions.width"
-                  value={formData.dimensions.width}
-                  onChange={handleInputChange}
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-            </div>
-
-            {/* Checkboxes */}
-            <div
-              style={{
-                marginBottom: "32px",
                 display: "flex",
-                gap: "24px",
-                flexWrap: "wrap",
+                alignItems: "center",
+                gap: "8px",
+                fontSize: "14px",
+                color: "#374151",
+                cursor: "pointer",
               }}
             >
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "14px",
-                  color: "#374151",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  name="isRecommended"
-                  checked={formData.isRecommended}
-                  onChange={handleInputChange}
-                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                />
-                Recommended Product
-              </label>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "14px",
-                  color: "#374151",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  name="isFeatured"
-                  checked={formData.isFeatured}
-                  onChange={handleInputChange}
-                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                />
-                Featured Product
-              </label>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "14px",
-                  color: "#374151",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  name="isDigital"
-                  checked={formData.isDigital}
-                  onChange={handleInputChange}
-                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                />
-                Digital Product
-              </label>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "14px",
-                  color: "#374151",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  name="allowBackorder"
-                  checked={formData.allowBackorder}
-                  onChange={handleInputChange}
-                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                />
-                Allow Backorder
-              </label>
-            </div>
+              <input
+                type="checkbox"
+                name="isRecommended"
+                checked={formData.isRecommended}
+                onChange={handleInputChange}
+                style={{ width: "16px", height: "16px", cursor: "pointer" }}
+              />
+              Recommended Product
+            </label>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontSize: "14px",
+                color: "#374151",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                name="isFeatured"
+                checked={formData.isFeatured}
+                onChange={handleInputChange}
+                style={{ width: "16px", height: "16px", cursor: "pointer" }}
+              />
+              Featured Product
+            </label>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontSize: "14px",
+                color: "#374151",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                name="isDigital"
+                checked={formData.isDigital}
+                onChange={handleInputChange}
+                style={{ width: "16px", height: "16px", cursor: "pointer" }}
+              />
+              Digital Product
+            </label>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontSize: "14px",
+                color: "#374151",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                name="allowBackorder"
+                checked={formData.allowBackorder}
+                onChange={handleInputChange}
+                style={{ width: "16px", height: "16px", cursor: "pointer" }}
+              />
+              Allow Backorder
+            </label>
           </div>
 
           {/* Footer Actions */}

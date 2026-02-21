@@ -20,28 +20,11 @@ function ProductEdit() {
     productKey: "",
     description: "",
     category: "",
+    subcategory: "",
     brand: "",
-    modelNumber: "",
-    mrp: "",
-    sellingPrice: "",
-    costPrice: "",
-    currency: "INR",
-    sku: "",
-    stockQuantity: 0,
-    stockStatus: "in-stock",
-    lowStockThreshold: 5,
-    allowBackorder: false,
-    reservedQuantity: 0,
     specifications: [],
     keyFeatures: [],
     variants: [],
-    dimensions: {
-      weight: "",
-      length: "",
-      width: "",
-      height: "",
-      unit: "cm",
-    },
     warranty: "",
     returnPolicy: "",
     isRecommended: false,
@@ -52,7 +35,6 @@ function ProductEdit() {
     metaDescription: "",
     keywords: [],
     tags: [],
-    relatedProducts: [],
     existingImages: [],
     imagesToDelete: [],
     newImageFiles: [],
@@ -64,7 +46,6 @@ function ProductEdit() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [priceValidationMessage, setPriceValidationMessage] = useState("");
   const [dragOver, setDragOver] = useState(false);
 
   useEffect(() => {
@@ -85,28 +66,11 @@ function ProductEdit() {
             productKey: product.productKey || "",
             description: product.description || "",
             category: product.category?._id || product.category || "",
+            subcategory: product.subcategory?._id || product.subcategory || "",
             brand: product.brand || "",
-            modelNumber: product.modelNumber || "",
-            mrp: product.mrp || "",
-            sellingPrice: product.sellingPrice || "",
-            costPrice: product.costPrice || "",
-            currency: product.currency || "INR",
-            sku: product.sku || "",
-            stockQuantity: product.stockQuantity || 0,
-            stockStatus: product.stockStatus || "in-stock",
-            lowStockThreshold: product.lowStockThreshold || 5,
-            allowBackorder: product.allowBackorder || false,
-            reservedQuantity: product.reservedQuantity || 0,
             specifications: product.specifications || [],
             keyFeatures: product.keyFeatures || [],
             variants: product.variants || [],
-            dimensions: product.dimensions || {
-              weight: "",
-              length: "",
-              width: "",
-              height: "",
-              unit: "cm",
-            },
             warranty: product.warranty || "",
             returnPolicy: product.returnPolicy || "",
             isRecommended: product.isRecommended || false,
@@ -117,7 +81,6 @@ function ProductEdit() {
             metaDescription: product.metaDescription || "",
             keywords: product.keywords || [],
             tags: product.tags || [],
-            relatedProducts: product.relatedProducts || [],
             existingImages: product.images || [],
             imagesToDelete: [],
             newImageFiles: [],
@@ -155,13 +118,6 @@ function ProductEdit() {
       .replace(/^-+|-+$/g, "");
   };
 
-  const validatePricing = (sellingPrice, mrp) => {
-    if (sellingPrice && mrp && parseFloat(sellingPrice) > parseFloat(mrp)) {
-      setPriceValidationMessage("⚠️ Selling price cannot be higher than MRP");
-    } else {
-      setPriceValidationMessage("");
-    }
-  };
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -175,12 +131,6 @@ function ProductEdit() {
 
       const newData = { ...prev, [name]: val };
       if (name === "name") newData.slug = generateSlug(val);
-      if (name === "sellingPrice" || name === "mrp") {
-        const currentPrice =
-          name === "sellingPrice" ? val : newData.sellingPrice;
-        const currentMrp = name === "mrp" ? val : newData.mrp;
-        validatePricing(currentPrice, currentMrp);
-      }
       return newData;
     });
   };
@@ -240,10 +190,11 @@ function ProductEdit() {
         {
           sku: "",
           price: 0,
-          stockQuantity: 0,
+          mrp:0,
           attributes: { color: "", size: "", model: "" },
           images: [],
           specifications: [],
+          keyFeatures: [],
           isActive: true,
         },
       ],
@@ -341,25 +292,15 @@ function ProductEdit() {
         return;
       }
 
-      if (
-        formData.mrp &&
-        formData.sellingPrice &&
-        parseFloat(formData.sellingPrice) > parseFloat(formData.mrp)
-      ) {
-        setError("Selling price cannot be higher than MRP");
-        return;
-      }
-
       setSaving(true);
 
       const cleanedVariants = formData.variants.filter(
-        (v) =>
-          v.sku ||
-          v.attributes.color ||
-          v.attributes.size ||
-          v.price ||
-          v.stockQuantity,
+        (v) => v.sku || v.price
       );
+      if (cleanedVariants.length === 0) {
+        setError("At least one variant is required");
+        return;
+      }
 
       const updateData = {
         name: formData.name,
@@ -367,62 +308,25 @@ function ProductEdit() {
         productKey: formData.productKey,
         description: formData.description,
         category: formData.category,
+        subcategory: formData.subcategory || undefined,
         brand: formData.brand || undefined,
-        modelNumber: formData.modelNumber || undefined,
-        mrp:
-          cleanedVariants.length === 0 && formData.mrp
-            ? parseFloat(formData.mrp)
-            : undefined,
-        sellingPrice:
-          cleanedVariants.length === 0 && formData.sellingPrice
-            ? parseFloat(formData.sellingPrice)
-            : undefined,
-        costPrice: formData.costPrice
-          ? parseFloat(formData.costPrice)
-          : undefined,
-        currency: formData.currency,
-        sku: cleanedVariants.length === 0 ? formData.sku : undefined,
-        stockQuantity: formData.stockQuantity
-          ? parseInt(formData.stockQuantity)
-          : 0,
-        stockStatus: formData.stockStatus,
-        lowStockThreshold: formData.lowStockThreshold
-          ? parseInt(formData.lowStockThreshold)
-          : 5,
-        allowBackorder: formData.allowBackorder,
-        reservedQuantity: formData.reservedQuantity
-          ? parseInt(formData.reservedQuantity)
-          : 0,
         specifications: formData.specifications.filter((s) => s.key || s.value),
         keyFeatures: formData.keyFeatures.filter((kf) => kf.key || kf.value),
         variants: cleanedVariants.map((v) => ({
           sku: v.sku,
           price: v.price ? parseFloat(v.price) : 0,
-          stockQuantity: v.stockQuantity ? parseInt(v.stockQuantity) : 0,
+          mrp: v.mrp ? parseFloat(v.mrp) : undefined,
+          currency: v.currency || "INR",
           attributes: {
-            color: v.attributes.color || undefined,
-            size: v.attributes.size || undefined,
-            model: v.attributes.model || undefined,
+            color: v.attributes?.color || undefined,
+            size: v.attributes?.size || undefined,
+            model: v.attributes?.model || undefined,
           },
           images: v.images || [],
           specifications: v.specifications || [],
+          keyFeatures: v.keyFeatures || [],
           isActive: v.isActive !== undefined ? v.isActive : true,
         })),
-        dimensions: {
-          weight: formData.dimensions.weight
-            ? parseFloat(formData.dimensions.weight)
-            : undefined,
-          length: formData.dimensions.length
-            ? parseFloat(formData.dimensions.length)
-            : undefined,
-          width: formData.dimensions.width
-            ? parseFloat(formData.dimensions.width)
-            : undefined,
-          height: formData.dimensions.height
-            ? parseFloat(formData.dimensions.height)
-            : undefined,
-          unit: formData.dimensions.unit || "cm",
-        },
         warranty: formData.warranty,
         returnPolicy: formData.returnPolicy,
         isRecommended: !!formData.isRecommended,
@@ -431,15 +335,11 @@ function ProductEdit() {
         status: formData.status,
         metaTitle: formData.metaTitle || undefined,
         metaDescription: formData.metaDescription || undefined,
-        keywords: formData.keywords.length > 0 ? formData.keywords : undefined,
+        keywords:
+          formData.keywords.length > 0 ? formData.keywords : undefined,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
-        relatedProducts:
-          formData.relatedProducts.length > 0
-            ? formData.relatedProducts
-            : undefined,
       };
 
-      // Handle images if needed
       if (
         formData.newImageFiles.length > 0 ||
         formData.imagesToDelete.length > 0
@@ -448,7 +348,6 @@ function ProductEdit() {
         updateData.images = formData.newImageFiles;
       }
 
-      console.log("Updating product:", updateData);
       await productService.updateProduct(id, updateData);
 
       setSuccess("Product updated successfully!");
@@ -944,37 +843,6 @@ function ProductEdit() {
                   onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
                 />
               </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  SKU
-                </label>
-                <input
-                  type="text"
-                  name="sku"
-                  value={formData.sku}
-                  onChange={handleInputChange}
-                  disabled={saving}
-                  placeholder="Leave empty if using variants"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
             </div>
 
             <div
@@ -1063,34 +931,16 @@ function ProductEdit() {
               }}
             >
               <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Model Number
-                </label>
-                <input
-                  type="text"
-                  name="modelNumber"
-                  value={formData.modelNumber}
-                  onChange={handleInputChange}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
+  <label
+    style={{
+      display: "block",
+      fontSize: "14px",
+    }}
+    onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+  >
+    Label Text
+  </label>
+</div>
               <div>
                 <label
                   style={{
@@ -1720,43 +1570,11 @@ function ProductEdit() {
                           }}
                         />
                       </div>
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: "500",
-                            marginBottom: "6px",
-                            color: "#374151",
-                          }}
-                        >
-                          Stock
-                        </label>
-                        <input
-                          type="number"
-                          value={variant.stockQuantity}
-                          onChange={(e) =>
-                            handleVariantChange(
-                              index,
-                              "stockQuantity",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="0"
-                          style={{
-                            width: "100%",
-                            padding: "8px 10px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "6px",
-                            fontSize: "14px",
-                            outline: "none",
-                          }}
-                        />
+
                       </div>
-                    </div>
                   </div>
                 ))}
-              </div>
+             </div>
             )}
 
             <button
@@ -1777,280 +1595,6 @@ function ProductEdit() {
               + Add Variant
             </button>
 
-            {/* Pricing (if no variants) */}
-            {formData.variants.length === 0 && (
-              <div style={{ marginBottom: "32px" }}>
-                <h3
-                  style={{
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    marginBottom: "16px",
-                    color: "#111827",
-                  }}
-                >
-                  Pricing Details
-                </h3>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr 1fr",
-                    gap: "16px",
-                  }}
-                >
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        marginBottom: "8px",
-                        color: "#374151",
-                      }}
-                    >
-                      MRP (₹)
-                    </label>
-                    <input
-                      type="number"
-                      name="mrp"
-                      value={formData.mrp}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                      }}
-                      onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                      onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                    />
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        marginBottom: "8px",
-                        color: "#374151",
-                      }}
-                    >
-                      Selling Price (₹)
-                    </label>
-                    <input
-                      type="number"
-                      name="sellingPrice"
-                      value={formData.sellingPrice}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        border: priceValidationMessage
-                          ? "1px solid #ef4444"
-                          : "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                      }}
-                      onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                      onBlur={(e) =>
-                        (e.target.style.borderColor = priceValidationMessage
-                          ? "#ef4444"
-                          : "#d1d5db")
-                      }
-                    />
-                    {priceValidationMessage && (
-                      <div
-                        style={{
-                          fontSize: "13px",
-                          color: "#ef4444",
-                          marginTop: "4px",
-                        }}
-                      >
-                        {priceValidationMessage}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        marginBottom: "8px",
-                        color: "#374151",
-                      }}
-                    >
-                      Cost Price (₹)
-                    </label>
-                    <input
-                      type="number"
-                      name="costPrice"
-                      value={formData.costPrice}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                      }}
-                      onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                      onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Stock & Dimensions */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr 1fr",
-                gap: "16px",
-                marginBottom: "32px",
-              }}
-            >
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Stock Quantity
-                </label>
-                <input
-                  type="number"
-                  name="stockQuantity"
-                  value={formData.stockQuantity}
-                  onChange={handleInputChange}
-                  min="0"
-                  placeholder="0"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Weight (kg)
-                </label>
-                <input
-                  type="number"
-                  name="dimensions.weight"
-                  value={formData.dimensions.weight}
-                  onChange={handleInputChange}
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Length (cm)
-                </label>
-                <input
-                  type="number"
-                  name="dimensions.length"
-                  value={formData.dimensions.length}
-                  onChange={handleInputChange}
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Width (cm)
-                </label>
-                <input
-                  type="number"
-                  name="dimensions.width"
-                  value={formData.dimensions.width}
-                  onChange={handleInputChange}
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-            </div>
 
             {/* Tags & Keywords */}
             <div
@@ -2277,7 +1821,6 @@ function ProductEdit() {
                 Delete Product
               </button>
             </div>
-          </div>
 
           {/* Footer Actions */}
           <div
@@ -2328,9 +1871,9 @@ function ProductEdit() {
               {saving ? "Saving..." : "Save Changes"}
             </button>
           </div>
-        </form>
-      </div>
-
+          </div>
+         </form>
+         </div>
       <style>
         {`
           @keyframes spin {

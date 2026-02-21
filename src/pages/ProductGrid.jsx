@@ -465,7 +465,7 @@ function ProductGrid() {
 
                   {/* Image */}
                   <Link
-                    to={`admin/products/details/${product._id}`}
+                    to={`/admin/products/details/${product._id}`}
                     style={{ textDecoration: 'none' }}
                   >
                     <div style={{

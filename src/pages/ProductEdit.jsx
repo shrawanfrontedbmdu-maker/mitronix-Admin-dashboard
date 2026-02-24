@@ -6,6 +6,7 @@ import {
   MdDelete,
   MdClose,
   MdCloudUpload,
+  MdLocalOffer,
 } from "react-icons/md";
 import { productService } from "../api/productService.js";
 import { categoryService } from "../api/categoryService.js";
@@ -30,6 +31,7 @@ function ProductEdit() {
     isRecommended: false,
     isFeatured: false,
     isDigital: false,
+    allowBackorder: false,
     status: "active",
     metaTitle: "",
     metaDescription: "",
@@ -40,14 +42,21 @@ function ProductEdit() {
     newImageFiles: [],
   });
 
+  // Top Deal — product model ka field nahi, TopDeal.products[] update hota hai
+  const [selectedTopDeal, setSelectedTopDeal] = useState(""); // currently selected
+  const [originalTopDeal, setOriginalTopDeal] = useState(""); // page load pe jo tha
+
   const [imagePreviews, setImagePreviews] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [topDeals, setTopDeals] = useState([]);
+  const [topDealsLoading, setTopDealsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [dragOver, setDragOver] = useState(false);
 
+  // ── Product + categories fetch ──────────────────────────────────────────
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -56,9 +65,7 @@ function ProductEdit() {
           productService.getProductById(id),
           categoryService.getCategories(),
         ]);
-
         const product = productResponse.product || productResponse;
-
         if (product) {
           setFormData({
             name: product.name || "",
@@ -76,6 +83,7 @@ function ProductEdit() {
             isRecommended: product.isRecommended || false,
             isFeatured: product.isFeatured || false,
             isDigital: product.isDigital || false,
+            allowBackorder: product.allowBackorder || false,
             status: product.status || "active",
             metaTitle: product.metaTitle || "",
             metaDescription: product.metaDescription || "",
@@ -88,7 +96,6 @@ function ProductEdit() {
         } else {
           setError("Product not found");
         }
-
         setCategories(categoriesData.categories || categoriesData);
       } catch (err) {
         console.error("Error fetching data:", err);
@@ -97,38 +104,59 @@ function ProductEdit() {
         setLoading(false);
       }
     };
+    if (id) fetchData();
+  }, [id]);
 
-    if (id) {
-      fetchData();
-    }
+  // ── Top Deals fetch + figure out linked deal ────────────────────────────
+  useEffect(() => {
+    const fetchTopDeals = async () => {
+      try {
+        setTopDealsLoading(true);
+        const res = await fetch("/api/top-deals"); // ← apna route
+        const data = await res.json();
+        if (data.success) {
+          const deals = data.topDeals || [];
+          setTopDeals(deals);
+          // Ye product kis deal mein hai?
+          const linked = deals.find((deal) =>
+            (deal.products || []).some(
+              (p) => (typeof p === "object" ? p._id : p).toString() === id,
+            ),
+          );
+          const linkedId = linked?._id || "";
+          setSelectedTopDeal(linkedId);
+          setOriginalTopDeal(linkedId);
+        }
+      } catch (err) {
+        console.error("Top deals fetch error:", err);
+      } finally {
+        setTopDealsLoading(false);
+      }
+    };
+    if (id) fetchTopDeals();
   }, [id]);
 
   useEffect(() => {
-    return () => {
-      imagePreviews.forEach((url) => URL.revokeObjectURL(url));
-    };
+    return () => imagePreviews.forEach((url) => URL.revokeObjectURL(url));
   }, [imagePreviews]);
 
-  const generateSlug = (name) => {
-    return name
+  // ── Helpers ─────────────────────────────────────────────────────────────
+  const generateSlug = (name) =>
+    name
       .toLowerCase()
       .trim()
       .replace(/[^\w\s-]/g, "")
       .replace(/[\s_-]+/g, "-")
       .replace(/^-+|-+$/g, "");
-  };
-
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     const val = type === "checkbox" ? checked : value;
-
     setFormData((prev) => {
       if (name.includes(".")) {
         const [parent, child] = name.split(".");
         return { ...prev, [parent]: { ...prev[parent], [child]: val } };
       }
-
       const newData = { ...prev, [name]: val };
       if (name === "name") newData.slug = generateSlug(val);
       return newData;
@@ -140,36 +168,32 @@ function ProductEdit() {
     updated[index][field] = value;
     setFormData((prev) => ({ ...prev, specifications: updated }));
   };
-
-  const addSpecification = () => {
+  const addSpecification = () =>
     setFormData((prev) => ({
       ...prev,
       specifications: [...prev.specifications, { key: "", value: "" }],
     }));
-  };
-
-  const removeSpecification = (index) => {
-    const updated = formData.specifications.filter((_, i) => i !== index);
-    setFormData((prev) => ({ ...prev, specifications: updated }));
-  };
+  const removeSpecification = (index) =>
+    setFormData((prev) => ({
+      ...prev,
+      specifications: prev.specifications.filter((_, i) => i !== index),
+    }));
 
   const handleKeyFeatureChange = (index, field, value) => {
     const updated = [...formData.keyFeatures];
     updated[index][field] = value;
     setFormData((prev) => ({ ...prev, keyFeatures: updated }));
   };
-
-  const addKeyFeature = () => {
+  const addKeyFeature = () =>
     setFormData((prev) => ({
       ...prev,
       keyFeatures: [...prev.keyFeatures, { key: "", value: "" }],
     }));
-  };
-
-  const removeKeyFeature = (index) => {
-    const updated = formData.keyFeatures.filter((_, i) => i !== index);
-    setFormData((prev) => ({ ...prev, keyFeatures: updated }));
-  };
+  const removeKeyFeature = (index) =>
+    setFormData((prev) => ({
+      ...prev,
+      keyFeatures: prev.keyFeatures.filter((_, i) => i !== index),
+    }));
 
   const handleVariantChange = (index, field, value) => {
     const updatedVariants = [...formData.variants];
@@ -181,8 +205,7 @@ function ProductEdit() {
     }
     setFormData((prev) => ({ ...prev, variants: updatedVariants }));
   };
-
-  const addVariant = () => {
+  const addVariant = () =>
     setFormData((prev) => ({
       ...prev,
       variants: [
@@ -190,7 +213,7 @@ function ProductEdit() {
         {
           sku: "",
           price: 0,
-          mrp:0,
+          mrp: 0,
           attributes: { color: "", size: "", model: "" },
           images: [],
           specifications: [],
@@ -199,12 +222,11 @@ function ProductEdit() {
         },
       ],
     }));
-  };
-
-  const removeVariant = (index) => {
-    const updated = formData.variants.filter((_, i) => i !== index);
-    setFormData((prev) => ({ ...prev, variants: updated }));
-  };
+  const removeVariant = (index) =>
+    setFormData((prev) => ({
+      ...prev,
+      variants: prev.variants.filter((_, i) => i !== index),
+    }));
 
   const handleImageUpload = (files) => {
     const validTypes = [
@@ -219,7 +241,6 @@ function ProductEdit() {
       maxImages -
       (formData.existingImages.length + formData.newImageFiles.length);
     const filesToProcess = Array.from(files).slice(0, remaining);
-
     const validFiles = filesToProcess.filter((file) => {
       if (!validTypes.includes(file.type)) {
         setError(`Invalid type: ${file.name}`);
@@ -231,7 +252,6 @@ function ProductEdit() {
       }
       return true;
     });
-
     const newPreviews = validFiles.map((file) => URL.createObjectURL(file));
     setImagePreviews((prev) => [...prev, ...newPreviews]);
     setFormData((prev) => ({
@@ -239,7 +259,6 @@ function ProductEdit() {
       newImageFiles: [...prev.newImageFiles, ...validFiles],
     }));
   };
-
   const handleFileSelect = (e) => handleImageUpload(e.target.files);
   const handleDrop = (e) => {
     e.preventDefault();
@@ -254,8 +273,7 @@ function ProductEdit() {
     e.preventDefault();
     setDragOver(false);
   };
-
-  const handleDeleteExistingImage = (image) => {
+  const handleDeleteExistingImage = (image) =>
     setFormData((prev) => ({
       ...prev,
       existingImages: prev.existingImages.filter(
@@ -263,8 +281,6 @@ function ProductEdit() {
       ),
       imagesToDelete: [...prev.imagesToDelete, image.public_id],
     }));
-  };
-
   const handleRemoveNewImage = (index) => {
     URL.revokeObjectURL(imagePreviews[index]);
     setFormData((prev) => ({
@@ -274,31 +290,79 @@ function ProductEdit() {
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // ── Top Deal sync — existing updateTopDeal controller use karta hai ─────
+  // Controller FormData expect karta hai with products as JSON.stringify(array)
+  const syncTopDeal = async () => {
+    if (selectedTopDeal === originalTopDeal) return; // kuch nahi badla
+
+    // 1. Purani deal se hata do
+    if (originalTopDeal) {
+      const oldDeal = topDeals.find((d) => d._id === originalTopDeal);
+      if (oldDeal) {
+        const updatedProducts = (oldDeal.products || [])
+          .map((p) => (typeof p === "object" ? p._id : p).toString())
+          .filter((pid) => pid !== id);
+
+        const fd = new FormData();
+        fd.append("title", oldDeal.title);
+        fd.append("description", oldDeal.description || "");
+        fd.append("products", JSON.stringify(updatedProducts));
+        await fetch(`/api/top-deals/${originalTopDeal}`, {
+          method: "PUT",
+          body: fd,
+        }); // ← apna route
+      }
+    }
+
+    // 2. Nayi deal mein add karo
+    if (selectedTopDeal) {
+      const newDeal = topDeals.find((d) => d._id === selectedTopDeal);
+      if (newDeal) {
+        const existingProducts = (newDeal.products || []).map((p) =>
+          (typeof p === "object" ? p._id : p).toString(),
+        );
+
+        if (!existingProducts.includes(id)) {
+          const updatedProducts = [...existingProducts, id];
+          const fd = new FormData();
+          fd.append("title", newDeal.title);
+          fd.append("description", newDeal.description || "");
+          fd.append("products", JSON.stringify(updatedProducts));
+          await fetch(`/api/top-deals/${selectedTopDeal}`, {
+            method: "PUT",
+            body: fd,
+          }); // ← apna route
+        }
+      }
+    }
+
+    setOriginalTopDeal(selectedTopDeal);
+  };
+
+  // ── Submit ───────────────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
 
+    if (
+      !formData.name ||
+      !formData.productKey ||
+      !formData.description ||
+      !formData.category ||
+      !formData.warranty ||
+      !formData.returnPolicy
+    ) {
+      setError("Please fill all required fields");
+      return;
+    }
+
+    setSaving(true);
     try {
-      if (
-        !formData.name ||
-        !formData.productKey ||
-        !formData.description ||
-        !formData.category ||
-        !formData.warranty ||
-        !formData.returnPolicy
-      ) {
-        setError("Please fill all required fields");
-        return;
-      }
-
-      setSaving(true);
-
-      const cleanedVariants = formData.variants.filter(
-        (v) => v.sku || v.price
-      );
+      const cleanedVariants = formData.variants.filter((v) => v.sku || v.price);
       if (cleanedVariants.length === 0) {
         setError("At least one variant is required");
+        setSaving(false);
         return;
       }
 
@@ -332,11 +396,11 @@ function ProductEdit() {
         isRecommended: !!formData.isRecommended,
         isFeatured: !!formData.isFeatured,
         isDigital: !!formData.isDigital,
+        allowBackorder: !!formData.allowBackorder,
         status: formData.status,
         metaTitle: formData.metaTitle || undefined,
         metaDescription: formData.metaDescription || undefined,
-        keywords:
-          formData.keywords.length > 0 ? formData.keywords : undefined,
+        keywords: formData.keywords.length > 0 ? formData.keywords : undefined,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
       };
 
@@ -348,12 +412,13 @@ function ProductEdit() {
         updateData.images = formData.newImageFiles;
       }
 
+      // 1. Product update
       await productService.updateProduct(id, updateData);
+      // 2. Top Deal sync
+      await syncTopDeal();
 
       setSuccess("Product updated successfully!");
-      setTimeout(() => {
-        navigate(`/admin/products/details/${id}`);
-      }, 1500);
+      setTimeout(() => navigate(`/admin/products/details/${id}`), 1500);
     } catch (err) {
       console.error("Error updating product:", err);
       setError(
@@ -373,10 +438,26 @@ function ProductEdit() {
       )
     ) {
       try {
+        // Delete se pehle deal se hata do
+        if (originalTopDeal) {
+          const oldDeal = topDeals.find((d) => d._id === originalTopDeal);
+          if (oldDeal) {
+            const updatedProducts = (oldDeal.products || [])
+              .map((p) => (typeof p === "object" ? p._id : p).toString())
+              .filter((pid) => pid !== id);
+            const fd = new FormData();
+            fd.append("title", oldDeal.title);
+            fd.append("description", oldDeal.description || "");
+            fd.append("products", JSON.stringify(updatedProducts));
+            await fetch(`/api/top-deals/${originalTopDeal}`, {
+              method: "PUT",
+              body: fd,
+            });
+          }
+        }
         await productService.deleteProduct(id);
         navigate("/admin/products/list");
       } catch (err) {
-        console.error("Error deleting product:", err);
         setError("Failed to delete product");
       }
     }
@@ -412,7 +493,7 @@ function ProductEdit() {
               animation: "spin 1s linear infinite",
               margin: "0 auto 16px",
             }}
-          ></div>
+          />
           <div
             style={{ fontSize: "16px", fontWeight: "500", color: "#111827" }}
           >
@@ -449,7 +530,6 @@ function ProductEdit() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            backgroundColor: "#fff",
           }}
         >
           <div>
@@ -483,12 +563,10 @@ function ProductEdit() {
               border: "1px solid #e5e7eb",
             }}
           >
-            <MdArrowBack size={16} />
-            Back to Details
+            <MdArrowBack size={16} /> Back to Details
           </Link>
         </div>
 
-        {/* Alerts */}
         {error && (
           <div
             style={{
@@ -504,7 +582,6 @@ function ProductEdit() {
             {error}
           </div>
         )}
-
         {success && (
           <div
             style={{
@@ -530,7 +607,7 @@ function ProductEdit() {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                backgroundColor: "rgba(0, 0, 0, 0.3)",
+                backgroundColor: "rgba(0,0,0,0.3)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -542,7 +619,7 @@ function ProductEdit() {
                   padding: "32px",
                   backgroundColor: "white",
                   borderRadius: "12px",
-                  boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
+                  boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
                   textAlign: "center",
                 }}
               >
@@ -556,7 +633,7 @@ function ProductEdit() {
                     animation: "spin 1s linear infinite",
                     margin: "0 auto 16px",
                   }}
-                ></div>
+                />
                 <div
                   style={{
                     fontSize: "16px",
@@ -571,7 +648,7 @@ function ProductEdit() {
           )}
 
           <div style={{ padding: "32px" }}>
-            {/* Product Images */}
+            {/* ── Images ── */}
             <div style={{ marginBottom: "32px" }}>
               <h3
                 style={{
@@ -583,8 +660,6 @@ function ProductEdit() {
               >
                 Product Images
               </h3>
-
-              {/* Existing Images */}
               {formData.existingImages.length > 0 && (
                 <div style={{ marginBottom: "24px" }}>
                   <label
@@ -642,7 +717,6 @@ function ProductEdit() {
                             alignItems: "center",
                             justifyContent: "center",
                             cursor: "pointer",
-                            fontSize: "16px",
                           }}
                         >
                           <MdClose />
@@ -652,8 +726,6 @@ function ProductEdit() {
                   </div>
                 </div>
               )}
-
-              {/* New Images Preview */}
               {imagePreviews.length > 0 && (
                 <div style={{ marginBottom: "24px" }}>
                   <label
@@ -711,7 +783,6 @@ function ProductEdit() {
                             alignItems: "center",
                             justifyContent: "center",
                             cursor: "pointer",
-                            fontSize: "16px",
                           }}
                         >
                           <MdClose />
@@ -721,8 +792,6 @@ function ProductEdit() {
                   </div>
                 </div>
               )}
-
-              {/* Upload Area */}
               <div
                 onClick={() => document.getElementById("file-input").click()}
                 onDrop={handleDrop}
@@ -760,7 +829,6 @@ function ProductEdit() {
                   /5 images
                 </div>
               </div>
-
               <input
                 id="file-input"
                 type="file"
@@ -771,7 +839,7 @@ function ProductEdit() {
               />
             </div>
 
-            {/* Name & Basic Info - Same as Create */}
+            {/* ── Name ── */}
             <div style={{ marginBottom: "24px" }}>
               <label
                 style={{
@@ -804,6 +872,7 @@ function ProductEdit() {
               />
             </div>
 
+            {/* ── Slug ── */}
             <div
               style={{
                 display: "grid",
@@ -845,6 +914,7 @@ function ProductEdit() {
               </div>
             </div>
 
+            {/* ── Brand & Category ── */}
             <div
               style={{
                 display: "grid",
@@ -922,6 +992,7 @@ function ProductEdit() {
               </div>
             </div>
 
+            {/* ── Product Key ── */}
             <div
               style={{
                 display: "grid",
@@ -930,17 +1001,7 @@ function ProductEdit() {
                 marginBottom: "24px",
               }}
             >
-              <div>
-  <label
-    style={{
-      display: "block",
-      fontSize: "14px",
-    }}
-    onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-  >
-    Label Text
-  </label>
-</div>
+              <div />
               <div>
                 <label
                   style={{
@@ -974,6 +1035,7 @@ function ProductEdit() {
               </div>
             </div>
 
+            {/* ── Status & Stock ── */}
             <div
               style={{
                 display: "grid",
@@ -1049,7 +1111,7 @@ function ProductEdit() {
               </div>
             </div>
 
-            {/* Description */}
+            {/* ── Description ── */}
             <div style={{ marginBottom: "24px" }}>
               <label
                 style={{
@@ -1084,7 +1146,7 @@ function ProductEdit() {
               />
             </div>
 
-            {/* Warranty & Return Policy */}
+            {/* ── Warranty & Return ── */}
             <div style={{ marginBottom: "24px" }}>
               <label
                 style={{
@@ -1118,7 +1180,6 @@ function ProductEdit() {
                 onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
                 onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
               />
-
               <label
                 style={{
                   display: "block",
@@ -1152,7 +1213,7 @@ function ProductEdit() {
               />
             </div>
 
-            {/* Specifications */}
+            {/* ── Specifications ── */}
             <div style={{ marginBottom: "24px" }}>
               <div
                 style={{
@@ -1245,7 +1306,7 @@ function ProductEdit() {
               ))}
             </div>
 
-            {/* Key Features */}
+            {/* ── Key Features ── */}
             <div style={{ marginBottom: "32px" }}>
               <div
                 style={{
@@ -1338,7 +1399,7 @@ function ProductEdit() {
               ))}
             </div>
 
-            {/* Variants */}
+            {/* ── Variants ── */}
             {formData.variants.length > 0 && (
               <div style={{ marginBottom: "32px" }}>
                 <h3
@@ -1403,110 +1464,53 @@ function ProductEdit() {
                         gap: "12px",
                       }}
                     >
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: "500",
-                            marginBottom: "6px",
-                            color: "#374151",
-                          }}
-                        >
-                          Color
-                        </label>
-                        <input
-                          type="text"
-                          value={variant.attributes.color}
-                          onChange={(e) =>
-                            handleVariantChange(
-                              index,
-                              "attributes.color",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="Red, Blue"
-                          style={{
-                            width: "100%",
-                            padding: "8px 10px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "6px",
-                            fontSize: "14px",
-                            outline: "none",
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: "500",
-                            marginBottom: "6px",
-                            color: "#374151",
-                          }}
-                        >
-                          Size
-                        </label>
-                        <input
-                          type="text"
-                          value={variant.attributes.size}
-                          onChange={(e) =>
-                            handleVariantChange(
-                              index,
-                              "attributes.size",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="S, M, L"
-                          style={{
-                            width: "100%",
-                            padding: "8px 10px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "6px",
-                            fontSize: "14px",
-                            outline: "none",
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: "500",
-                            marginBottom: "6px",
-                            color: "#374151",
-                          }}
-                        >
-                          Model
-                        </label>
-                        <input
-                          type="text"
-                          value={variant.attributes.model}
-                          onChange={(e) =>
-                            handleVariantChange(
-                              index,
-                              "attributes.model",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="Pro, Basic"
-                          style={{
-                            width: "100%",
-                            padding: "8px 10px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "6px",
-                            fontSize: "14px",
-                            outline: "none",
-                          }}
-                        />
-                      </div>
+                      {["color", "size", "model"].map((attr) => (
+                        <div key={attr}>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: "13px",
+                              fontWeight: "500",
+                              marginBottom: "6px",
+                              color: "#374151",
+                              textTransform: "capitalize",
+                            }}
+                          >
+                            {attr}
+                          </label>
+                          <input
+                            type="text"
+                            value={variant.attributes?.[attr] || ""}
+                            onChange={(e) =>
+                              handleVariantChange(
+                                index,
+                                `attributes.${attr}`,
+                                e.target.value,
+                              )
+                            }
+                            placeholder={
+                              attr === "color"
+                                ? "Red, Blue"
+                                : attr === "size"
+                                  ? "S, M, L"
+                                  : "Pro, Basic"
+                            }
+                            style={{
+                              width: "100%",
+                              padding: "8px 10px",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "6px",
+                              fontSize: "14px",
+                              outline: "none",
+                            }}
+                          />
+                        </div>
+                      ))}
                     </div>
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "1fr 1fr 1fr",
+                        gridTemplateColumns: "1fr 1fr",
                         gap: "12px",
                         marginTop: "12px",
                       }}
@@ -1570,13 +1574,11 @@ function ProductEdit() {
                           }}
                         />
                       </div>
-
-                      </div>
+                    </div>
                   </div>
                 ))}
-             </div>
+              </div>
             )}
-
             <button
               type="button"
               onClick={addVariant}
@@ -1595,8 +1597,7 @@ function ProductEdit() {
               + Add Variant
             </button>
 
-
-            {/* Tags & Keywords */}
+            {/* ── Tags & Keywords ── */}
             <div
               style={{
                 display: "grid",
@@ -1619,7 +1620,6 @@ function ProductEdit() {
                 </label>
                 <input
                   type="text"
-                  name="tags"
                   value={formData.tags.join(", ")}
                   onChange={(e) =>
                     setFormData((prev) => ({
@@ -1630,7 +1630,7 @@ function ProductEdit() {
                         .filter(Boolean),
                     }))
                   }
-                  placeholder="electronics, smartphone, 5G"
+                  placeholder="electronics, smartphone"
                   style={{
                     width: "100%",
                     padding: "10px 12px",
@@ -1657,7 +1657,6 @@ function ProductEdit() {
                 </label>
                 <input
                   type="text"
-                  name="keywords"
                   value={formData.keywords.join(", ")}
                   onChange={(e) =>
                     setFormData((prev) => ({
@@ -1683,7 +1682,155 @@ function ProductEdit() {
               </div>
             </div>
 
-            {/* Checkboxes */}
+            {/* ══════════════════════════════════════════════════════════════
+                TOP DEAL — checkbox style ke jaisa, radio buttons use kiye
+                Backend flow: TopDeal.products[] update hota hai (PUT /api/top-deals/:id)
+                Product model mein koi field nahi add hui
+            ══════════════════════════════════════════════════════════════ */}
+            <div style={{ marginBottom: "32px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  marginBottom: "14px",
+                }}
+              >
+                <MdLocalOffer size={18} color="#f59e0b" />
+                <span
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    color: "#374151",
+                  }}
+                >
+                  Top Deal
+                </span>
+                {selectedTopDeal !== originalTopDeal && (
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      padding: "2px 8px",
+                      backgroundColor: "#fef3c7",
+                      color: "#92400e",
+                      borderRadius: "99px",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Changed — save karo
+                  </span>
+                )}
+              </div>
+
+              {topDealsLoading ? (
+                <p style={{ fontSize: "13px", color: "#9ca3af", margin: 0 }}>
+                  Loading top deals...
+                </p>
+              ) : topDeals.length === 0 ? (
+                <p style={{ fontSize: "13px", color: "#9ca3af", margin: 0 }}>
+                  Koi Top Deal available nahi hai.
+                </p>
+              ) : (
+                <div style={{ display: "flex", gap: "24px", flexWrap: "wrap" }}>
+                  {/* None option — same style as other checkboxes */}
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      fontSize: "14px",
+                      color: "#374151",
+                      cursor: saving ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="topDeal"
+                      value=""
+                      checked={selectedTopDeal === ""}
+                      onChange={() => setSelectedTopDeal("")}
+                      disabled={saving}
+                      style={{
+                        width: "16px",
+                        height: "16px",
+                        cursor: saving ? "not-allowed" : "pointer",
+                      }}
+                    />
+                    None
+                  </label>
+
+                  {topDeals.map((deal) => (
+                    <label
+                      key={deal._id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        fontSize: "14px",
+                        color: "#374151",
+                        cursor: saving ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="topDeal"
+                        value={deal._id}
+                        checked={selectedTopDeal === deal._id}
+                        onChange={() => setSelectedTopDeal(deal._id)}
+                        disabled={saving}
+                        style={{
+                          width: "16px",
+                          height: "16px",
+                          cursor: saving ? "not-allowed" : "pointer",
+                          accentColor: "#f59e0b",
+                        }}
+                      />
+                      {deal.image?.url && (
+                        <img
+                          src={deal.image.url}
+                          alt={deal.title}
+                          style={{
+                            width: "22px",
+                            height: "22px",
+                            objectFit: "cover",
+                            borderRadius: "4px",
+                            border: "1px solid #e5e7eb",
+                          }}
+                        />
+                      )}
+                      {deal.title}
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          padding: "1px 6px",
+                          borderRadius: "99px",
+                          backgroundColor: deal.isActive
+                            ? "#dcfce7"
+                            : "#fee2e2",
+                          color: deal.isActive ? "#166534" : "#991b1b",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {deal.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "#9ca3af",
+                  marginTop: "8px",
+                  marginBottom: 0,
+                }}
+              >
+                Selected deal ke products list mein ye product add ho jayega.
+              </p>
+            </div>
+            {/* ══════════════════════════════════════════════════════════════ */}
+
+            {/* ── Checkboxes ── */}
             <div
               style={{
                 marginBottom: "32px",
@@ -1692,85 +1839,36 @@ function ProductEdit() {
                 flexWrap: "wrap",
               }}
             >
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "14px",
-                  color: "#374151",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  name="isRecommended"
-                  checked={formData.isRecommended}
-                  onChange={handleInputChange}
-                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                />
-                Recommended Product
-              </label>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "14px",
-                  color: "#374151",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  name="isFeatured"
-                  checked={formData.isFeatured}
-                  onChange={handleInputChange}
-                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                />
-                Featured Product
-              </label>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "14px",
-                  color: "#374151",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  name="isDigital"
-                  checked={formData.isDigital}
-                  onChange={handleInputChange}
-                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                />
-                Digital Product
-              </label>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "14px",
-                  color: "#374151",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  name="allowBackorder"
-                  checked={formData.allowBackorder}
-                  onChange={handleInputChange}
-                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                />
-                Allow Backorder
-              </label>
+              {[
+                { name: "isRecommended", label: "Recommended Product" },
+                { name: "isFeatured", label: "Featured Product" },
+                { name: "isDigital", label: "Digital Product" },
+                { name: "allowBackorder", label: "Allow Backorder" },
+              ].map(({ name, label }) => (
+                <label
+                  key={name}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    fontSize: "14px",
+                    color: "#374151",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    name={name}
+                    checked={!!formData[name]}
+                    onChange={handleInputChange}
+                    style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                  />
+                  {label}
+                </label>
+              ))}
             </div>
 
-            {/* Danger Zone */}
+            {/* ── Danger Zone ── */}
             <div
               style={{
                 padding: "24px",
@@ -1817,12 +1915,12 @@ function ProductEdit() {
                   gap: "8px",
                 }}
               >
-                <MdDelete size={16} />
-                Delete Product
+                <MdDelete size={16} /> Delete Product
               </button>
             </div>
+          </div>
 
-          {/* Footer Actions */}
+          {/* Footer */}
           <div
             style={{
               padding: "20px 32px",
@@ -1871,17 +1969,15 @@ function ProductEdit() {
               {saving ? "Saving..." : "Save Changes"}
             </button>
           </div>
-          </div>
-         </form>
-         </div>
-      <style>
-        {`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}
-      </style>
+        </form>
+      </div>
+
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

@@ -3,9 +3,8 @@ import axios from "axios";
 import { mockCategories } from "./mockData.js";
 
 const api = axios.create({
-  baseURL:
-    import.meta.env.VITE_API_BASE_URL ||
-    "https://miltronix-backend-1.onrender.com/api",
+ // ✅ Fix karo
+baseURL: import.meta.env.VITE_API_BASE_URL || "https://miltronix-backend-2.onrender.com/api",
   timeout: 60000,
 });
 
@@ -16,13 +15,10 @@ export const categoryService = {
       const response = await api.get("/category");
       return response.data || [];
     } catch (error) {
-      console.warn(
-        "API unavailable, returning mock categories:",
-        error.message
-      );
+      console.warn("API unavailable, returning mock categories:", error.message);
       return mockCategories.map((cat) => ({
         ...cat,
-        status: cat.status || "active", // ensure status exists
+        status: cat.status || "active",
       }));
     }
   },
@@ -40,14 +36,8 @@ export const categoryService = {
   // ================= CREATE CATEGORY =================
   createCategory: async (categoryData) => {
     try {
-      const isFormData = categoryData instanceof FormData;
-
-      const response = await api.post("/category", categoryData, {
-        headers: isFormData
-          ? { "Content-Type": "multipart/form-data" }
-          : { "Content-Type": "application/json" },
-      });
-
+      // ✅ Axios khud FormData detect karke boundary set karega
+      const response = await api.post("/category", categoryData);
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: error.message };
@@ -57,14 +47,8 @@ export const categoryService = {
   // ================= UPDATE CATEGORY =================
   updateCategory: async (id, categoryData) => {
     try {
-      const isFormData = categoryData instanceof FormData;
-
-      const response = await api.put(`/category/${id}`, categoryData, {
-        headers: isFormData
-          ? { "Content-Type": "multipart/form-data" }
-          : { "Content-Type": "application/json" },
-      });
-
+      // ✅ Axios khud FormData detect karke boundary set karega
+      const response = await api.put(`/category/${id}`, categoryData);
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: error.message };

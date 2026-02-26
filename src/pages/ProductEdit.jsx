@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   MdArrowBack,
@@ -7,9 +7,14 @@ import {
   MdClose,
   MdCloudUpload,
   MdLocalOffer,
+  MdEdit,
+  MdCheck,
+  MdToggleOn,
+  MdToggleOff,
 } from "react-icons/md";
 import { productService } from "../api/productService.js";
 import { categoryService } from "../api/categoryService.js";
+import { instance } from "../api/axios.config.js";
 
 function ProductEdit() {
   const { id } = useParams();
@@ -42,21 +47,45 @@ function ProductEdit() {
     newImageFiles: [],
   });
 
-  // Top Deal — product model ka field nahi, TopDeal.products[] update hota hai
-  const [selectedTopDeal, setSelectedTopDeal] = useState(""); // currently selected
-  const [originalTopDeal, setOriginalTopDeal] = useState(""); // page load pe jo tha
-
-  const [imagePreviews, setImagePreviews] = useState([]);
-  const [categories, setCategories] = useState([]);
+  // Top Deal state
+  const [selectedTopDeal, setSelectedTopDeal] = useState("");
+  const [originalTopDeal, setOriginalTopDeal] = useState("");
   const [topDeals, setTopDeals] = useState([]);
   const [topDealsLoading, setTopDealsLoading] = useState(false);
+  const [showCreateDeal, setShowCreateDeal] = useState(false);
+
+  // Create deal form
+  const [newDeal, setNewDeal] = useState({ title: "", description: "" });
+  const [newDealImages, setNewDealImages] = useState([]);
+  const [newDealPreviews, setNewDealPreviews] = useState([]);
+  const [creating, setCreating] = useState(false);
+
+  // Edit deal state
+  const [editingDeal, setEditingDeal] = useState(null); // deal object being edited
+  const [editDealData, setEditDealData] = useState({
+    title: "",
+    description: "",
+  });
+  const [editDealImages, setEditDealImages] = useState([]);
+  const [editDealPreviews, setEditDealPreviews] = useState([]);
+  const [editDealExisting, setEditDealExisting] = useState([]);
+  const [editDealToDelete, setEditDealToDelete] = useState([]);
+  const [updating, setUpdating] = useState(false);
+  const [deletingDealId, setDeletingDealId] = useState(null);
+
+  const newDealImgRef = useRef();
+  const editDealImgRef = useRef();
+
+  // Other state
+  const [imagePreviews, setImagePreviews] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [dragOver, setDragOver] = useState(false);
 
-  // ── Product + categories fetch ──────────────────────────────────────────
+  // Fetch product + categories
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -93,6 +122,9 @@ function ProductEdit() {
             imagesToDelete: [],
             newImageFiles: [],
           });
+          const dealId = product.topDeal?._id || product.topDeal || "";
+          setSelectedTopDeal(dealId.toString());
+          setOriginalTopDeal(dealId.toString());
         } else {
           setError("Product not found");
         }
@@ -107,40 +139,30 @@ function ProductEdit() {
     if (id) fetchData();
   }, [id]);
 
-  // ── Top Deals fetch + figure out linked deal ────────────────────────────
+  // Fetch top deals
+  const fetchTopDeals = async () => {
+    try {
+      setTopDealsLoading(true);
+      const { data } = await instance.get("/top-deals");
+      if (data.success) setTopDeals(data.topDeals || []);
+    } catch (err) {
+      console.error(
+        "Top deals fetch error:",
+        err.response?.data || err.message,
+      );
+    } finally {
+      setTopDealsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchTopDeals = async () => {
-      try {
-        setTopDealsLoading(true);
-        const res = await fetch("/api/top-deals"); // ← apna route
-        const data = await res.json();
-        if (data.success) {
-          const deals = data.topDeals || [];
-          setTopDeals(deals);
-          // Ye product kis deal mein hai?
-          const linked = deals.find((deal) =>
-            (deal.products || []).some(
-              (p) => (typeof p === "object" ? p._id : p).toString() === id,
-            ),
-          );
-          const linkedId = linked?._id || "";
-          setSelectedTopDeal(linkedId);
-          setOriginalTopDeal(linkedId);
-        }
-      } catch (err) {
-        console.error("Top deals fetch error:", err);
-      } finally {
-        setTopDealsLoading(false);
-      }
-    };
     if (id) fetchTopDeals();
   }, [id]);
-
   useEffect(() => {
     return () => imagePreviews.forEach((url) => URL.revokeObjectURL(url));
   }, [imagePreviews]);
 
-  // ── Helpers ─────────────────────────────────────────────────────────────
+  // Helpers
   const generateSlug = (name) =>
     name
       .toLowerCase()
@@ -236,24 +258,25 @@ function ProductEdit() {
       "image/gif",
       "image/webp",
     ];
-    const maxImages = 5;
     const remaining =
-      maxImages -
-      (formData.existingImages.length + formData.newImageFiles.length);
-    const filesToProcess = Array.from(files).slice(0, remaining);
-    const validFiles = filesToProcess.filter((file) => {
-      if (!validTypes.includes(file.type)) {
-        setError(`Invalid type: ${file.name}`);
-        return false;
-      }
-      if (file.size > 5 * 1024 * 1024) {
-        setError(`File too large: ${file.name}`);
-        return false;
-      }
-      return true;
-    });
-    const newPreviews = validFiles.map((file) => URL.createObjectURL(file));
-    setImagePreviews((prev) => [...prev, ...newPreviews]);
+      5 - (formData.existingImages.length + formData.newImageFiles.length);
+    const validFiles = Array.from(files)
+      .slice(0, remaining)
+      .filter((file) => {
+        if (!validTypes.includes(file.type)) {
+          setError(`Invalid file type: ${file.name}`);
+          return false;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          setError(`File too large: ${file.name}`);
+          return false;
+        }
+        return true;
+      });
+    setImagePreviews((prev) => [
+      ...prev,
+      ...validFiles.map((f) => URL.createObjectURL(f)),
+    ]);
     setFormData((prev) => ({
       ...prev,
       newImageFiles: [...prev.newImageFiles, ...validFiles],
@@ -290,61 +313,143 @@ function ProductEdit() {
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // ── Top Deal sync — existing updateTopDeal controller use karta hai ─────
-  // Controller FormData expect karta hai with products as JSON.stringify(array)
-  const syncTopDeal = async () => {
-    if (selectedTopDeal === originalTopDeal) return; // kuch nahi badla
-
-    // 1. Purani deal se hata do
-    if (originalTopDeal) {
-      const oldDeal = topDeals.find((d) => d._id === originalTopDeal);
-      if (oldDeal) {
-        const updatedProducts = (oldDeal.products || [])
-          .map((p) => (typeof p === "object" ? p._id : p).toString())
-          .filter((pid) => pid !== id);
-
-        const fd = new FormData();
-        fd.append("title", oldDeal.title);
-        fd.append("description", oldDeal.description || "");
-        fd.append("products", JSON.stringify(updatedProducts));
-        await fetch(`/api/top-deals/${originalTopDeal}`, {
-          method: "PUT",
-          body: fd,
-        }); // ← apna route
+  // ── Top Deal: Create ──────────────────────────────────────────────
+  const handleCreateDeal = async () => {
+    if (!newDeal.title.trim()) return;
+    setCreating(true);
+    try {
+      const fd = new FormData();
+      fd.append("title", newDeal.title.trim());
+      fd.append("description", newDeal.description.trim());
+      newDealImages.forEach((file, idx) =>
+        fd.append(idx === 0 ? "image" : "images", file),
+      );
+      const { data } = await instance.post("/top-deals", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (data.success) {
+        await fetchTopDeals();
+        setSelectedTopDeal(data.topDeal._id);
+        setShowCreateDeal(false);
+        setNewDeal({ title: "", description: "" });
+        setNewDealImages([]);
+        newDealPreviews.forEach((p) => URL.revokeObjectURL(p));
+        setNewDealPreviews([]);
       }
+    } catch (err) {
+      console.error("Create deal error:", err.response?.data || err.message);
+      setError(err.response?.data?.message || "Failed to create deal");
+    } finally {
+      setCreating(false);
     }
-
-    // 2. Nayi deal mein add karo
-    if (selectedTopDeal) {
-      const newDeal = topDeals.find((d) => d._id === selectedTopDeal);
-      if (newDeal) {
-        const existingProducts = (newDeal.products || []).map((p) =>
-          (typeof p === "object" ? p._id : p).toString(),
-        );
-
-        if (!existingProducts.includes(id)) {
-          const updatedProducts = [...existingProducts, id];
-          const fd = new FormData();
-          fd.append("title", newDeal.title);
-          fd.append("description", newDeal.description || "");
-          fd.append("products", JSON.stringify(updatedProducts));
-          await fetch(`/api/top-deals/${selectedTopDeal}`, {
-            method: "PUT",
-            body: fd,
-          }); // ← apna route
-        }
-      }
-    }
-
-    setOriginalTopDeal(selectedTopDeal);
   };
 
-  // ── Submit ───────────────────────────────────────────────────────────────
+  // ── Top Deal: Open Edit Modal ──────────────────────────────────────
+  const openEditDeal = (deal) => {
+    setEditingDeal(deal);
+    setEditDealData({ title: deal.title, description: deal.description || "" });
+    setEditDealExisting([
+      ...(deal.image ? [deal.image] : []),
+      ...(deal.images || []),
+    ]);
+    setEditDealToDelete([]);
+    setEditDealImages([]);
+    setEditDealPreviews([]);
+  };
+
+  const closeEditDeal = () => {
+    setEditingDeal(null);
+    editDealPreviews.forEach((p) => URL.revokeObjectURL(p));
+    setEditDealPreviews([]);
+    setEditDealImages([]);
+  };
+
+  // ── Top Deal: Update ──────────────────────────────────────────────
+  const handleUpdateDeal = async () => {
+    if (!editDealData.title.trim()) return;
+    setUpdating(true);
+    try {
+      const fd = new FormData();
+      fd.append("title", editDealData.title.trim());
+      fd.append("description", editDealData.description.trim());
+      if (editDealToDelete.length)
+        fd.append("imagesToDelete", JSON.stringify(editDealToDelete));
+      editDealImages.forEach((file, idx) =>
+        fd.append(idx === 0 ? "image" : "images", file),
+      );
+      const { data } = await instance.put(`/top-deals/${editingDeal._id}`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (data.success) {
+        await fetchTopDeals();
+        closeEditDeal();
+      }
+    } catch (err) {
+      console.error("Update deal error:", err.response?.data || err.message);
+      setError(err.response?.data?.message || "Failed to update deal");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // ── Top Deal: Delete ──────────────────────────────────────────────
+  const handleDeleteDeal = async (dealId) => {
+    if (!window.confirm("Delete this deal? This cannot be undone.")) return;
+    setDeletingDealId(dealId);
+    try {
+      const { data } = await instance.delete(`/top-deals/${dealId}`);
+      if (data.success) {
+        if (selectedTopDeal === dealId) setSelectedTopDeal("");
+        if (originalTopDeal === dealId) setOriginalTopDeal("");
+        await fetchTopDeals();
+      }
+    } catch (err) {
+      console.error("Delete deal error:", err.response?.data || err.message);
+      setError(err.response?.data?.message || "Failed to delete deal");
+    } finally {
+      setDeletingDealId(null);
+    }
+  };
+
+  // ── Top Deal: Toggle Status ───────────────────────────────────────
+  const handleToggleDealStatus = async (dealId) => {
+    try {
+      const { data } = await instance.patch(
+        `/top-deals/${dealId}/toggle-status`,
+      );
+      if (data.success) await fetchTopDeals();
+    } catch (err) {
+      console.error("Toggle deal error:", err.response?.data || err.message);
+      setError("Failed to toggle deal status");
+    }
+  };
+
+  // ── Top Deal: Sync on product save ────────────────────────────────
+  const syncTopDeal = async () => {
+    if (selectedTopDeal === originalTopDeal) return;
+    try {
+      if (originalTopDeal) {
+        await instance.patch(`/top-deals/${originalTopDeal}/remove-product`, {
+          productId: id,
+        });
+      }
+      if (selectedTopDeal) {
+        await instance.patch(`/top-deals/${selectedTopDeal}/add-product`, {
+          productId: id,
+        });
+      }
+      setOriginalTopDeal(selectedTopDeal);
+    } catch (err) {
+      console.error("Sync top deal error:", err.response?.data || err.message);
+      throw err;
+    }
+  };
+
+  // ── Submit ────────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
-
     if (
       !formData.name ||
       !formData.productKey ||
@@ -356,16 +461,13 @@ function ProductEdit() {
       setError("Please fill all required fields");
       return;
     }
-
+    const cleanedVariants = formData.variants.filter((v) => v.sku || v.price);
+    if (cleanedVariants.length === 0) {
+      setError("At least one variant is required");
+      return;
+    }
     setSaving(true);
     try {
-      const cleanedVariants = formData.variants.filter((v) => v.sku || v.price);
-      if (cleanedVariants.length === 0) {
-        setError("At least one variant is required");
-        setSaving(false);
-        return;
-      }
-
       const updateData = {
         name: formData.name,
         slug: formData.slug,
@@ -374,8 +476,19 @@ function ProductEdit() {
         category: formData.category,
         subcategory: formData.subcategory || undefined,
         brand: formData.brand || undefined,
+        warranty: formData.warranty,
+        returnPolicy: formData.returnPolicy,
+        isRecommended: !!formData.isRecommended,
+        isFeatured: !!formData.isFeatured,
+        isDigital: !!formData.isDigital,
+        allowBackorder: !!formData.allowBackorder,
+        status: formData.status,
+        metaTitle: formData.metaTitle || undefined,
+        metaDescription: formData.metaDescription || undefined,
         specifications: formData.specifications.filter((s) => s.key || s.value),
         keyFeatures: formData.keyFeatures.filter((kf) => kf.key || kf.value),
+        keywords: formData.keywords.length > 0 ? formData.keywords : [],
+        tags: formData.tags.length > 0 ? formData.tags : [],
         variants: cleanedVariants.map((v) => ({
           sku: v.sku,
           price: v.price ? parseFloat(v.price) : 0,
@@ -391,32 +504,12 @@ function ProductEdit() {
           keyFeatures: v.keyFeatures || [],
           isActive: v.isActive !== undefined ? v.isActive : true,
         })),
-        warranty: formData.warranty,
-        returnPolicy: formData.returnPolicy,
-        isRecommended: !!formData.isRecommended,
-        isFeatured: !!formData.isFeatured,
-        isDigital: !!formData.isDigital,
-        allowBackorder: !!formData.allowBackorder,
-        status: formData.status,
-        metaTitle: formData.metaTitle || undefined,
-        metaDescription: formData.metaDescription || undefined,
-        keywords: formData.keywords.length > 0 ? formData.keywords : undefined,
-        tags: formData.tags.length > 0 ? formData.tags : undefined,
+        existingImages: formData.existingImages,
+        imagesToDelete: formData.imagesToDelete,
+        newImageFiles: formData.newImageFiles,
       };
-
-      if (
-        formData.newImageFiles.length > 0 ||
-        formData.imagesToDelete.length > 0
-      ) {
-        updateData.imagesToDelete = formData.imagesToDelete;
-        updateData.images = formData.newImageFiles;
-      }
-
-      // 1. Product update
       await productService.updateProduct(id, updateData);
-      // 2. Top Deal sync
       await syncTopDeal();
-
       setSuccess("Product updated successfully!");
       setTimeout(() => navigate(`/admin/products/details/${id}`), 1500);
     } catch (err) {
@@ -438,23 +531,6 @@ function ProductEdit() {
       )
     ) {
       try {
-        // Delete se pehle deal se hata do
-        if (originalTopDeal) {
-          const oldDeal = topDeals.find((d) => d._id === originalTopDeal);
-          if (oldDeal) {
-            const updatedProducts = (oldDeal.products || [])
-              .map((p) => (typeof p === "object" ? p._id : p).toString())
-              .filter((pid) => pid !== id);
-            const fd = new FormData();
-            fd.append("title", oldDeal.title);
-            fd.append("description", oldDeal.description || "");
-            fd.append("products", JSON.stringify(updatedProducts));
-            await fetch(`/api/top-deals/${originalTopDeal}`, {
-              method: "PUT",
-              body: fd,
-            });
-          }
-        }
         await productService.deleteProduct(id);
         navigate("/admin/products/list");
       } catch (err) {
@@ -463,7 +539,17 @@ function ProductEdit() {
     }
   };
 
-  if (loading) {
+  const inp = {
+    width: "100%",
+    padding: "10px 12px",
+    border: "1px solid #d1d5db",
+    borderRadius: "8px",
+    fontSize: "14px",
+    outline: "none",
+    boxSizing: "border-box",
+  };
+
+  if (loading)
     return (
       <div
         style={{
@@ -479,7 +565,6 @@ function ProductEdit() {
             padding: "32px",
             backgroundColor: "white",
             borderRadius: "12px",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
             textAlign: "center",
           }}
         >
@@ -502,7 +587,6 @@ function ProductEdit() {
         </div>
       </div>
     );
-  }
 
   return (
     <div
@@ -619,7 +703,6 @@ function ProductEdit() {
                   padding: "32px",
                   backgroundColor: "white",
                   borderRadius: "12px",
-                  boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
                   textAlign: "center",
                 }}
               >
@@ -648,7 +731,7 @@ function ProductEdit() {
           )}
 
           <div style={{ padding: "32px" }}>
-            {/* ── Images ── */}
+            {/* Images */}
             <div style={{ marginBottom: "32px" }}>
               <h3
                 style={{
@@ -821,7 +904,11 @@ function ProductEdit() {
                     fontWeight: "500",
                   }}
                 >
-                  Add more images
+                  {formData.existingImages.length +
+                    formData.newImageFiles.length >=
+                  5
+                    ? "Maximum images reached"
+                    : "Click or drag to add images"}
                 </div>
                 <div style={{ fontSize: "13px", color: "#6b7280" }}>
                   {formData.existingImages.length +
@@ -836,10 +923,15 @@ function ProductEdit() {
                 accept="image/*"
                 onChange={handleFileSelect}
                 style={{ display: "none" }}
+                disabled={
+                  formData.existingImages.length +
+                    formData.newImageFiles.length >=
+                  5
+                }
               />
             </div>
 
-            {/* ── Name ── */}
+            {/* Name */}
             <div style={{ marginBottom: "24px" }}>
               <label
                 style={{
@@ -850,7 +942,7 @@ function ProductEdit() {
                   color: "#374151",
                 }}
               >
-                Name*
+                Product Name*
               </label>
               <input
                 type="text"
@@ -859,20 +951,13 @@ function ProductEdit() {
                 onChange={handleInputChange}
                 required
                 disabled={saving}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  outline: "none",
-                }}
+                style={inp}
                 onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
                 onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
               />
             </div>
 
-            {/* ── Slug ── */}
+            {/* Slug + Product Key */}
             <div
               style={{
                 display: "grid",
@@ -900,21 +985,38 @@ function ProductEdit() {
                   onChange={handleInputChange}
                   required
                   disabled={saving}
+                  style={inp}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+              <div>
+                <label
                   style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
+                    display: "block",
                     fontSize: "14px",
-                    outline: "none",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
                   }}
+                >
+                  Product Key*
+                </label>
+                <input
+                  type="text"
+                  name="productKey"
+                  value={formData.productKey}
+                  onChange={handleInputChange}
+                  required
+                  disabled={saving}
+                  style={inp}
                   onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
                   onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
                 />
               </div>
             </div>
 
-            {/* ── Brand & Category ── */}
+            {/* Brand + Category */}
             <div
               style={{
                 display: "grid",
@@ -941,14 +1043,7 @@ function ProductEdit() {
                   value={formData.brand}
                   onChange={handleInputChange}
                   disabled={saving}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
+                  style={inp}
                   onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
                   onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
                 />
@@ -970,15 +1065,7 @@ function ProductEdit() {
                   value={formData.category}
                   onChange={handleInputChange}
                   required
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                    backgroundColor: "white",
-                  }}
+                  style={{ ...inp, backgroundColor: "white" }}
                   onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
                   onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
                 >
@@ -992,50 +1079,7 @@ function ProductEdit() {
               </div>
             </div>
 
-            {/* ── Product Key ── */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "16px",
-                marginBottom: "24px",
-              }}
-            >
-              <div />
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Product Key*
-                </label>
-                <input
-                  type="text"
-                  name="productKey"
-                  value={formData.productKey}
-                  onChange={handleInputChange}
-                  required
-                  disabled={saving}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                />
-              </div>
-            </div>
-
-            {/* ── Status & Stock ── */}
+            {/* Status */}
             <div
               style={{
                 display: "grid",
@@ -1060,15 +1104,7 @@ function ProductEdit() {
                   name="status"
                   value={formData.status}
                   onChange={handleInputChange}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                    backgroundColor: "white",
-                  }}
+                  style={{ ...inp, backgroundColor: "white" }}
                   onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
                   onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
                 >
@@ -1076,42 +1112,9 @@ function ProductEdit() {
                   <option value="inactive">Inactive</option>
                 </select>
               </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    marginBottom: "8px",
-                    color: "#374151",
-                  }}
-                >
-                  Stock Status
-                </label>
-                <select
-                  name="stockStatus"
-                  value={formData.stockStatus}
-                  onChange={handleInputChange}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                    backgroundColor: "white",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                >
-                  <option value="in-stock">In Stock</option>
-                  <option value="out-of-stock">Out of Stock</option>
-                  <option value="preorder">Pre-order</option>
-                </select>
-              </div>
             </div>
 
-            {/* ── Description ── */}
+            {/* Description */}
             <div style={{ marginBottom: "24px" }}>
               <label
                 style={{
@@ -1131,22 +1134,13 @@ function ProductEdit() {
                 required
                 rows="6"
                 placeholder="Enter detailed product description..."
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  outline: "none",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                }}
+                style={{ ...inp, resize: "vertical", fontFamily: "inherit" }}
                 onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
                 onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
               />
             </div>
 
-            {/* ── Warranty & Return ── */}
+            {/* Warranty + Return Policy */}
             <div style={{ marginBottom: "24px" }}>
               <label
                 style={{
@@ -1167,12 +1161,7 @@ function ProductEdit() {
                 rows="3"
                 placeholder="e.g., 1 year manufacturer warranty"
                 style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  outline: "none",
+                  ...inp,
                   resize: "vertical",
                   fontFamily: "inherit",
                   marginBottom: "16px",
@@ -1198,22 +1187,13 @@ function ProductEdit() {
                 required
                 rows="3"
                 placeholder="e.g., 30 days return policy"
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  outline: "none",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                }}
+                style={{ ...inp, resize: "vertical", fontFamily: "inherit" }}
                 onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
                 onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
               />
             </div>
 
-            {/* ── Specifications ── */}
+            {/* Specifications */}
             <div style={{ marginBottom: "24px" }}>
               <div
                 style={{
@@ -1297,7 +1277,6 @@ function ProductEdit() {
                       borderRadius: "6px",
                       fontSize: "13px",
                       cursor: "pointer",
-                      fontWeight: "500",
                     }}
                   >
                     Remove
@@ -1306,7 +1285,7 @@ function ProductEdit() {
               ))}
             </div>
 
-            {/* ── Key Features ── */}
+            {/* Key Features */}
             <div style={{ marginBottom: "32px" }}>
               <div
                 style={{
@@ -1390,7 +1369,6 @@ function ProductEdit() {
                       borderRadius: "6px",
                       fontSize: "13px",
                       cursor: "pointer",
-                      fontWeight: "500",
                     }}
                   >
                     Remove
@@ -1399,123 +1377,72 @@ function ProductEdit() {
               ))}
             </div>
 
-            {/* ── Variants ── */}
-            {formData.variants.length > 0 && (
-              <div style={{ marginBottom: "32px" }}>
-                <h3
+            {/* Variants */}
+            <div style={{ marginBottom: "32px" }}>
+              <h3
+                style={{
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  marginBottom: "16px",
+                  color: "#111827",
+                }}
+              >
+                Variants
+              </h3>
+              {formData.variants.map((variant, index) => (
+                <div
+                  key={index}
                   style={{
-                    fontSize: "16px",
-                    fontWeight: "600",
+                    padding: "20px",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "8px",
                     marginBottom: "16px",
-                    color: "#111827",
+                    backgroundColor: "#fafafa",
                   }}
                 >
-                  Variants
-                </h3>
-                {formData.variants.map((variant, index) => (
                   <div
-                    key={index}
                     style={{
-                      padding: "20px",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
                       marginBottom: "16px",
-                      backgroundColor: "#fafafa",
                     }}
                   >
-                    <div
+                    <h4
                       style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: "16px",
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        color: "#111827",
+                        margin: 0,
                       }}
                     >
-                      <h4
-                        style={{
-                          fontSize: "14px",
-                          fontWeight: "600",
-                          color: "#111827",
-                        }}
-                      >
-                        Variant {index + 1}
-                      </h4>
-                      <button
-                        type="button"
-                        onClick={() => removeVariant(index)}
-                        style={{
-                          padding: "6px 12px",
-                          backgroundColor: "#ef4444",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "6px",
-                          fontSize: "13px",
-                          cursor: "pointer",
-                          fontWeight: "500",
-                        }}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                    <div
+                      Variant {index + 1}
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={() => removeVariant(index)}
                       style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr 1fr",
-                        gap: "12px",
+                        padding: "6px 12px",
+                        backgroundColor: "#ef4444",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        fontSize: "13px",
+                        cursor: "pointer",
                       }}
                     >
-                      {["color", "size", "model"].map((attr) => (
-                        <div key={attr}>
-                          <label
-                            style={{
-                              display: "block",
-                              fontSize: "13px",
-                              fontWeight: "500",
-                              marginBottom: "6px",
-                              color: "#374151",
-                              textTransform: "capitalize",
-                            }}
-                          >
-                            {attr}
-                          </label>
-                          <input
-                            type="text"
-                            value={variant.attributes?.[attr] || ""}
-                            onChange={(e) =>
-                              handleVariantChange(
-                                index,
-                                `attributes.${attr}`,
-                                e.target.value,
-                              )
-                            }
-                            placeholder={
-                              attr === "color"
-                                ? "Red, Blue"
-                                : attr === "size"
-                                  ? "S, M, L"
-                                  : "Pro, Basic"
-                            }
-                            style={{
-                              width: "100%",
-                              padding: "8px 10px",
-                              border: "1px solid #d1d5db",
-                              borderRadius: "6px",
-                              fontSize: "14px",
-                              outline: "none",
-                            }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "12px",
-                        marginTop: "12px",
-                      }}
-                    >
-                      <div>
+                      Remove
+                    </button>
+                  </div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr 1fr",
+                      gap: "12px",
+                    }}
+                  >
+                    {["color", "size", "model"].map((attr) => (
+                      <div key={attr}>
                         <label
                           style={{
                             display: "block",
@@ -1523,17 +1450,28 @@ function ProductEdit() {
                             fontWeight: "500",
                             marginBottom: "6px",
                             color: "#374151",
+                            textTransform: "capitalize",
                           }}
                         >
-                          SKU
+                          {attr}
                         </label>
                         <input
                           type="text"
-                          value={variant.sku}
+                          value={variant.attributes?.[attr] || ""}
                           onChange={(e) =>
-                            handleVariantChange(index, "sku", e.target.value)
+                            handleVariantChange(
+                              index,
+                              `attributes.${attr}`,
+                              e.target.value,
+                            )
                           }
-                          placeholder="Variant SKU"
+                          placeholder={
+                            attr === "color"
+                              ? "e.g. Red"
+                              : attr === "size"
+                                ? "e.g. M"
+                                : "e.g. Pro"
+                          }
                           style={{
                             width: "100%",
                             padding: "8px 10px",
@@ -1541,63 +1479,136 @@ function ProductEdit() {
                             borderRadius: "6px",
                             fontSize: "14px",
                             outline: "none",
+                            boxSizing: "border-box",
                           }}
                         />
                       </div>
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: "500",
-                            marginBottom: "6px",
-                            color: "#374151",
-                          }}
-                        >
-                          Price
-                        </label>
-                        <input
-                          type="number"
-                          value={variant.price}
-                          onChange={(e) =>
-                            handleVariantChange(index, "price", e.target.value)
-                          }
-                          placeholder="0.00"
-                          step="0.01"
-                          style={{
-                            width: "100%",
-                            padding: "8px 10px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "6px",
-                            fontSize: "14px",
-                            outline: "none",
-                          }}
-                        />
-                      </div>
+                    ))}
+                  </div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr 1fr",
+                      gap: "12px",
+                      marginTop: "12px",
+                    }}
+                  >
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "13px",
+                          fontWeight: "500",
+                          marginBottom: "6px",
+                          color: "#374151",
+                        }}
+                      >
+                        SKU*
+                      </label>
+                      <input
+                        type="text"
+                        value={variant.sku}
+                        onChange={(e) =>
+                          handleVariantChange(index, "sku", e.target.value)
+                        }
+                        placeholder="Variant SKU"
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "6px",
+                          fontSize: "14px",
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "13px",
+                          fontWeight: "500",
+                          marginBottom: "6px",
+                          color: "#374151",
+                        }}
+                      >
+                        Price*
+                      </label>
+                      <input
+                        type="number"
+                        value={variant.price}
+                        onChange={(e) =>
+                          handleVariantChange(index, "price", e.target.value)
+                        }
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "6px",
+                          fontSize: "14px",
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "13px",
+                          fontWeight: "500",
+                          marginBottom: "6px",
+                          color: "#374151",
+                        }}
+                      >
+                        MRP
+                      </label>
+                      <input
+                        type="number"
+                        value={variant.mrp || ""}
+                        onChange={(e) =>
+                          handleVariantChange(index, "mrp", e.target.value)
+                        }
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "6px",
+                          fontSize: "14px",
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={addVariant}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#3b82f6",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                fontSize: "14px",
-                cursor: "pointer",
-                fontWeight: "500",
-                marginBottom: "32px",
-              }}
-            >
-              + Add Variant
-            </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={addVariant}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#3b82f6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                }}
+              >
+                + Add Variant
+              </button>
+            </div>
 
-            {/* ── Tags & Keywords ── */}
+            {/* Tags + Keywords */}
             <div
               style={{
                 display: "grid",
@@ -1631,14 +1642,7 @@ function ProductEdit() {
                     }))
                   }
                   placeholder="electronics, smartphone"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
+                  style={inp}
                   onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
                   onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
                 />
@@ -1668,169 +1672,1011 @@ function ProductEdit() {
                     }))
                   }
                   placeholder="keyword1, keyword2"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
+                  style={inp}
                   onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
                   onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
                 />
               </div>
             </div>
 
-            {/* ══════════════════════════════════════════════════════════════
-                TOP DEAL — checkbox style ke jaisa, radio buttons use kiye
-                Backend flow: TopDeal.products[] update hota hai (PUT /api/top-deals/:id)
-                Product model mein koi field nahi add hui
-            ══════════════════════════════════════════════════════════════ */}
-            <div style={{ marginBottom: "32px" }}>
+            {/* ══════════════ TOP DEAL SECTION ══════════════ */}
+            <div
+              style={{
+                marginBottom: "32px",
+                padding: "20px",
+                border: "1px solid #fde68a",
+                borderRadius: "12px",
+                backgroundColor: "#fffbeb",
+              }}
+            >
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "8px",
-                  marginBottom: "14px",
+                  justifyContent: "space-between",
+                  marginBottom: "16px",
                 }}
               >
-                <MdLocalOffer size={18} color="#f59e0b" />
-                <span
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: "600",
-                    color: "#374151",
-                  }}
+                <div
+                  style={{ display: "flex", alignItems: "center", gap: "8px" }}
                 >
-                  Top Deal
-                </span>
-                {selectedTopDeal !== originalTopDeal && (
+                  <MdLocalOffer size={18} color="#f59e0b" />
                   <span
                     style={{
-                      fontSize: "11px",
-                      padding: "2px 8px",
-                      backgroundColor: "#fef3c7",
+                      fontSize: "15px",
+                      fontWeight: "600",
                       color: "#92400e",
-                      borderRadius: "99px",
-                      fontWeight: "500",
                     }}
                   >
-                    Changed — save karo
+                    Top Deal
                   </span>
-                )}
+                  {selectedTopDeal !== originalTopDeal && (
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        padding: "1px 8px",
+                        backgroundColor: "#fee2e2",
+                        color: "#991b1b",
+                        borderRadius: "99px",
+                        fontWeight: "600",
+                      }}
+                    >
+                      ● Unsaved
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateDeal(true)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "7px 14px",
+                    backgroundColor: "#f59e0b",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                >
+                  + New Deal
+                </button>
               </div>
 
+              {/* Deals list with edit/delete/toggle */}
               {topDealsLoading ? (
-                <p style={{ fontSize: "13px", color: "#9ca3af", margin: 0 }}>
-                  Loading top deals...
-                </p>
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "16px",
+                    color: "#6b7280",
+                    fontSize: "14px",
+                  }}
+                >
+                  Loading deals...
+                </div>
               ) : topDeals.length === 0 ? (
-                <p style={{ fontSize: "13px", color: "#9ca3af", margin: 0 }}>
-                  Koi Top Deal available nahi hai.
-                </p>
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "16px",
+                    color: "#9ca3af",
+                    fontSize: "14px",
+                  }}
+                >
+                  No deals yet — create one above
+                </div>
               ) : (
-                <div style={{ display: "flex", gap: "24px", flexWrap: "wrap" }}>
-                  {/* None option — same style as other checkboxes */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  }}
+                >
+                  {/* None option */}
                   <label
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: "8px",
-                      fontSize: "14px",
-                      color: "#374151",
-                      cursor: saving ? "not-allowed" : "pointer",
+                      gap: "10px",
+                      padding: "10px 14px",
+                      border: `2px solid ${!selectedTopDeal ? "#f59e0b" : "#e5e7eb"}`,
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      backgroundColor: !selectedTopDeal ? "#fffbeb" : "white",
                     }}
                   >
                     <input
                       type="radio"
                       name="topDeal"
                       value=""
-                      checked={selectedTopDeal === ""}
+                      checked={!selectedTopDeal}
                       onChange={() => setSelectedTopDeal("")}
-                      disabled={saving}
                       style={{
-                        width: "16px",
-                        height: "16px",
-                        cursor: saving ? "not-allowed" : "pointer",
+                        width: "15px",
+                        height: "15px",
+                        accentColor: "#f59e0b",
                       }}
                     />
-                    None
+                    <span
+                      style={{
+                        fontSize: "13px",
+                        color: "#6b7280",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      None — no deal linked
+                    </span>
                   </label>
 
                   {topDeals.map((deal) => (
-                    <label
+                    <div
                       key={deal._id}
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: "8px",
-                        fontSize: "14px",
-                        color: "#374151",
-                        cursor: saving ? "not-allowed" : "pointer",
+                        gap: "10px",
+                        padding: "10px 14px",
+                        border: `2px solid ${selectedTopDeal === deal._id ? "#f59e0b" : "#e5e7eb"}`,
+                        borderRadius: "8px",
+                        backgroundColor:
+                          selectedTopDeal === deal._id ? "#fffbeb" : "white",
                       }}
                     >
+                      {/* Radio */}
                       <input
                         type="radio"
                         name="topDeal"
                         value={deal._id}
                         checked={selectedTopDeal === deal._id}
                         onChange={() => setSelectedTopDeal(deal._id)}
-                        disabled={saving}
                         style={{
-                          width: "16px",
-                          height: "16px",
-                          cursor: saving ? "not-allowed" : "pointer",
+                          width: "15px",
+                          height: "15px",
                           accentColor: "#f59e0b",
+                          flexShrink: 0,
+                          cursor: "pointer",
                         }}
                       />
-                      {deal.image?.url && (
-                        <img
-                          src={deal.image.url}
-                          alt={deal.title}
+
+                      {/* Thumbnail */}
+                      <div
+                        style={{
+                          width: "40px",
+                          height: "40px",
+                          borderRadius: "6px",
+                          overflow: "hidden",
+                          flexShrink: 0,
+                          border: "1px solid #e5e7eb",
+                        }}
+                      >
+                        {deal.image?.url ? (
+                          <img
+                            src={deal.image.url}
+                            alt={deal.title}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              backgroundColor: "#f9fafb",
+                            }}
+                          >
+                            <MdLocalOffer size={14} color="#d1d5db" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
                           style={{
-                            width: "22px",
-                            height: "22px",
-                            objectFit: "cover",
-                            borderRadius: "4px",
-                            border: "1px solid #e5e7eb",
+                            fontSize: "13px",
+                            fontWeight: "600",
+                            color: "#111827",
                           }}
-                        />
-                      )}
-                      {deal.title}
+                        >
+                          {deal.title}
+                        </div>
+                        {deal.description && (
+                          <div
+                            style={{
+                              fontSize: "11px",
+                              color: "#6b7280",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {deal.description}
+                          </div>
+                        )}
+                        <div
+                          style={{
+                            fontSize: "11px",
+                            color: "#6b7280",
+                            marginTop: "2px",
+                          }}
+                        >
+                          {deal.products?.length || 0} product(s)
+                        </div>
+                      </div>
+
+                      {/* Status badge */}
                       <span
                         style={{
-                          fontSize: "11px",
-                          padding: "1px 6px",
+                          fontSize: "10px",
+                          padding: "2px 7px",
                           borderRadius: "99px",
                           backgroundColor: deal.isActive
                             ? "#dcfce7"
                             : "#fee2e2",
                           color: deal.isActive ? "#166534" : "#991b1b",
-                          fontWeight: "500",
+                          fontWeight: "600",
+                          flexShrink: 0,
                         }}
                       >
                         {deal.isActive ? "Active" : "Inactive"}
                       </span>
-                    </label>
+
+                      {/* Actions */}
+                      <div
+                        style={{ display: "flex", gap: "4px", flexShrink: 0 }}
+                      >
+                        {/* Toggle */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleDealStatus(deal._id)}
+                          title={deal.isActive ? "Deactivate" : "Activate"}
+                          style={{
+                            padding: "5px",
+                            backgroundColor: "white",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            color: deal.isActive ? "#10b981" : "#9ca3af",
+                          }}
+                        >
+                          {deal.isActive ? (
+                            <MdToggleOn size={18} />
+                          ) : (
+                            <MdToggleOff size={18} />
+                          )}
+                        </button>
+                        {/* Edit */}
+                        <button
+                          type="button"
+                          onClick={() => openEditDeal(deal)}
+                          title="Edit deal"
+                          style={{
+                            padding: "5px",
+                            backgroundColor: "white",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            color: "#3b82f6",
+                          }}
+                        >
+                          <MdEdit size={16} />
+                        </button>
+                        {/* Delete */}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDeal(deal._id)}
+                          disabled={deletingDealId === deal._id}
+                          title="Delete deal"
+                          style={{
+                            padding: "5px",
+                            backgroundColor: "white",
+                            border: "1px solid #fecaca",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            color: "#ef4444",
+                          }}
+                        >
+                          <MdDelete size={16} />
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
-              <p
+            </div>
+
+            {/* ══════════════ CREATE DEAL MODAL ══════════════ */}
+            {showCreateDeal && (
+              <div
                 style={{
-                  fontSize: "12px",
-                  color: "#9ca3af",
-                  marginTop: "8px",
-                  marginBottom: 0,
+                  position: "fixed",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: "rgba(0,0,0,0.5)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 9998,
+                  padding: "20px",
                 }}
               >
-                Selected deal ke products list mein ye product add ho jayega.
-              </p>
-            </div>
-            {/* ══════════════════════════════════════════════════════════════ */}
+                <div
+                  style={{
+                    backgroundColor: "white",
+                    borderRadius: "16px",
+                    boxShadow: "0 25px 50px rgba(0,0,0,0.25)",
+                    width: "100%",
+                    maxWidth: "500px",
+                    maxHeight: "90vh",
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "20px 24px",
+                      borderBottom: "1px solid #e5e7eb",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#111827",
+                      }}
+                    >
+                      Create New Deal
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateDeal(false)}
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        backgroundColor: "#f3f4f6",
+                        border: "none",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <MdClose size={18} />
+                    </button>
+                  </div>
+                  <div style={{ padding: "24px", overflowY: "auto", flex: 1 }}>
+                    <div style={{ marginBottom: "14px" }}>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          fontWeight: "500",
+                          color: "#374151",
+                          marginBottom: "5px",
+                        }}
+                      >
+                        Title*
+                      </label>
+                      <input
+                        type="text"
+                        value={newDeal.title}
+                        onChange={(e) =>
+                          setNewDeal((p) => ({ ...p, title: e.target.value }))
+                        }
+                        placeholder="e.g., Summer Sale"
+                        style={{ ...inp, fontSize: "13px" }}
+                        onFocus={(e) =>
+                          (e.target.style.borderColor = "#f59e0b")
+                        }
+                        onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                      />
+                    </div>
+                    <div style={{ marginBottom: "14px" }}>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          fontWeight: "500",
+                          color: "#374151",
+                          marginBottom: "5px",
+                        }}
+                      >
+                        Description
+                      </label>
+                      <textarea
+                        value={newDeal.description}
+                        onChange={(e) =>
+                          setNewDeal((p) => ({
+                            ...p,
+                            description: e.target.value,
+                          }))
+                        }
+                        placeholder="Deal description..."
+                        rows="3"
+                        style={{
+                          ...inp,
+                          fontSize: "13px",
+                          resize: "vertical",
+                          fontFamily: "inherit",
+                        }}
+                        onFocus={(e) =>
+                          (e.target.style.borderColor = "#f59e0b")
+                        }
+                        onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                      />
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          fontWeight: "500",
+                          color: "#374151",
+                          marginBottom: "8px",
+                        }}
+                      >
+                        Images{" "}
+                        <span style={{ color: "#9ca3af" }}>
+                          (multiple allowed)
+                        </span>
+                      </label>
+                      {newDealPreviews.length > 0 && (
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "repeat(auto-fill, minmax(80px, 1fr))",
+                            gap: "8px",
+                            marginBottom: "10px",
+                          }}
+                        >
+                          {newDealPreviews.map((preview, idx) => (
+                            <div
+                              key={idx}
+                              style={{
+                                position: "relative",
+                                borderRadius: "8px",
+                                overflow: "hidden",
+                                border: "1px solid #e5e7eb",
+                                aspectRatio: "1",
+                              }}
+                            >
+                              <img
+                                src={preview}
+                                alt=""
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  URL.revokeObjectURL(preview);
+                                  setNewDealPreviews((p) =>
+                                    p.filter((_, i) => i !== idx),
+                                  );
+                                  setNewDealImages((p) =>
+                                    p.filter((_, i) => i !== idx),
+                                  );
+                                }}
+                                style={{
+                                  position: "absolute",
+                                  top: "3px",
+                                  right: "3px",
+                                  width: "18px",
+                                  height: "18px",
+                                  backgroundColor: "#ef4444",
+                                  color: "white",
+                                  border: "none",
+                                  borderRadius: "50%",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                <MdClose size={10} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div
+                        onClick={() => newDealImgRef.current.click()}
+                        style={{
+                          border: "2px dashed #f59e0b",
+                          borderRadius: "10px",
+                          padding: "16px",
+                          textAlign: "center",
+                          cursor: "pointer",
+                          backgroundColor: "#fffbeb",
+                        }}
+                      >
+                        <MdCloudUpload size={24} color="#f59e0b" />
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "#92400e",
+                            marginTop: "4px",
+                          }}
+                        >
+                          Click to upload
+                        </div>
+                      </div>
+                      <input
+                        ref={newDealImgRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files);
+                          setNewDealImages((p) => [...p, ...files]);
+                          setNewDealPreviews((p) => [
+                            ...p,
+                            ...files.map((f) => URL.createObjectURL(f)),
+                          ]);
+                          e.target.value = "";
+                        }}
+                        style={{ display: "none" }}
+                      />
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      padding: "16px 24px",
+                      borderTop: "1px solid #e5e7eb",
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      gap: "10px",
+                      backgroundColor: "#fafafa",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateDeal(false)}
+                      style={{
+                        padding: "9px 18px",
+                        backgroundColor: "white",
+                        color: "#374151",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        fontSize: "13px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCreateDeal}
+                      disabled={creating || !newDeal.title.trim()}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "9px 20px",
+                        backgroundColor:
+                          creating || !newDeal.title.trim()
+                            ? "#9ca3af"
+                            : "#f59e0b",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "8px",
+                        fontSize: "13px",
+                        fontWeight: "600",
+                        cursor: creating ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      <MdCheck size={15} />{" "}
+                      {creating ? "Creating..." : "Create & Link"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
-            {/* ── Checkboxes ── */}
+            {/* ══════════════ EDIT DEAL MODAL ══════════════ */}
+            {editingDeal && (
+              <div
+                style={{
+                  position: "fixed",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: "rgba(0,0,0,0.5)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 9998,
+                  padding: "20px",
+                }}
+              >
+                <div
+                  style={{
+                    backgroundColor: "white",
+                    borderRadius: "16px",
+                    boxShadow: "0 25px 50px rgba(0,0,0,0.25)",
+                    width: "100%",
+                    maxWidth: "500px",
+                    maxHeight: "90vh",
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "20px 24px",
+                      borderBottom: "1px solid #e5e7eb",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#111827",
+                      }}
+                    >
+                      Edit Deal: {editingDeal.title}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={closeEditDeal}
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        backgroundColor: "#f3f4f6",
+                        border: "none",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <MdClose size={18} />
+                    </button>
+                  </div>
+                  <div style={{ padding: "24px", overflowY: "auto", flex: 1 }}>
+                    <div style={{ marginBottom: "14px" }}>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          fontWeight: "500",
+                          color: "#374151",
+                          marginBottom: "5px",
+                        }}
+                      >
+                        Title*
+                      </label>
+                      <input
+                        type="text"
+                        value={editDealData.title}
+                        onChange={(e) =>
+                          setEditDealData((p) => ({
+                            ...p,
+                            title: e.target.value,
+                          }))
+                        }
+                        placeholder="Deal title"
+                        style={{ ...inp, fontSize: "13px" }}
+                        onFocus={(e) =>
+                          (e.target.style.borderColor = "#3b82f6")
+                        }
+                        onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                      />
+                    </div>
+                    <div style={{ marginBottom: "14px" }}>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          fontWeight: "500",
+                          color: "#374151",
+                          marginBottom: "5px",
+                        }}
+                      >
+                        Description
+                      </label>
+                      <textarea
+                        value={editDealData.description}
+                        onChange={(e) =>
+                          setEditDealData((p) => ({
+                            ...p,
+                            description: e.target.value,
+                          }))
+                        }
+                        rows="3"
+                        style={{
+                          ...inp,
+                          fontSize: "13px",
+                          resize: "vertical",
+                          fontFamily: "inherit",
+                        }}
+                        onFocus={(e) =>
+                          (e.target.style.borderColor = "#3b82f6")
+                        }
+                        onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                      />
+                    </div>
+                    {/* Existing images */}
+                    {editDealExisting.length > 0 && (
+                      <div style={{ marginBottom: "14px" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "12px",
+                            fontWeight: "500",
+                            color: "#374151",
+                            marginBottom: "8px",
+                          }}
+                        >
+                          Current Images
+                        </label>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "repeat(auto-fill, minmax(80px, 1fr))",
+                            gap: "8px",
+                          }}
+                        >
+                          {editDealExisting.map((img, idx) => (
+                            <div
+                              key={idx}
+                              style={{
+                                position: "relative",
+                                borderRadius: "8px",
+                                overflow: "hidden",
+                                border: "1px solid #e5e7eb",
+                                aspectRatio: "1",
+                              }}
+                            >
+                              <img
+                                src={img.url}
+                                alt=""
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditDealExisting((p) =>
+                                    p.filter((_, i) => i !== idx),
+                                  );
+                                  setEditDealToDelete((p) => [
+                                    ...p,
+                                    img.public_id,
+                                  ]);
+                                }}
+                                style={{
+                                  position: "absolute",
+                                  top: "3px",
+                                  right: "3px",
+                                  width: "18px",
+                                  height: "18px",
+                                  backgroundColor: "#ef4444",
+                                  color: "white",
+                                  border: "none",
+                                  borderRadius: "50%",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                <MdClose size={10} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* New images */}
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          fontWeight: "500",
+                          color: "#374151",
+                          marginBottom: "8px",
+                        }}
+                      >
+                        Add More Images
+                      </label>
+                      {editDealPreviews.length > 0 && (
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "repeat(auto-fill, minmax(80px, 1fr))",
+                            gap: "8px",
+                            marginBottom: "10px",
+                          }}
+                        >
+                          {editDealPreviews.map((preview, idx) => (
+                            <div
+                              key={idx}
+                              style={{
+                                position: "relative",
+                                borderRadius: "8px",
+                                overflow: "hidden",
+                                border: "1px solid #e5e7eb",
+                                aspectRatio: "1",
+                              }}
+                            >
+                              <img
+                                src={preview}
+                                alt=""
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  URL.revokeObjectURL(preview);
+                                  setEditDealPreviews((p) =>
+                                    p.filter((_, i) => i !== idx),
+                                  );
+                                  setEditDealImages((p) =>
+                                    p.filter((_, i) => i !== idx),
+                                  );
+                                }}
+                                style={{
+                                  position: "absolute",
+                                  top: "3px",
+                                  right: "3px",
+                                  width: "18px",
+                                  height: "18px",
+                                  backgroundColor: "#ef4444",
+                                  color: "white",
+                                  border: "none",
+                                  borderRadius: "50%",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                <MdClose size={10} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div
+                        onClick={() => editDealImgRef.current.click()}
+                        style={{
+                          border: "2px dashed #3b82f6",
+                          borderRadius: "10px",
+                          padding: "16px",
+                          textAlign: "center",
+                          cursor: "pointer",
+                          backgroundColor: "#eff6ff",
+                        }}
+                      >
+                        <MdCloudUpload size={24} color="#3b82f6" />
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "#1d4ed8",
+                            marginTop: "4px",
+                          }}
+                        >
+                          Click to upload
+                        </div>
+                      </div>
+                      <input
+                        ref={editDealImgRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files);
+                          setEditDealImages((p) => [...p, ...files]);
+                          setEditDealPreviews((p) => [
+                            ...p,
+                            ...files.map((f) => URL.createObjectURL(f)),
+                          ]);
+                          e.target.value = "";
+                        }}
+                        style={{ display: "none" }}
+                      />
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      padding: "16px 24px",
+                      borderTop: "1px solid #e5e7eb",
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      gap: "10px",
+                      backgroundColor: "#fafafa",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={closeEditDeal}
+                      style={{
+                        padding: "9px 18px",
+                        backgroundColor: "white",
+                        color: "#374151",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        fontSize: "13px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleUpdateDeal}
+                      disabled={updating || !editDealData.title.trim()}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "9px 20px",
+                        backgroundColor:
+                          updating || !editDealData.title.trim()
+                            ? "#9ca3af"
+                            : "#3b82f6",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "8px",
+                        fontSize: "13px",
+                        fontWeight: "600",
+                        cursor: updating ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      <MdCheck size={15} />{" "}
+                      {updating ? "Saving..." : "Save Changes"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Checkboxes */}
             <div
               style={{
                 marginBottom: "32px",
@@ -1868,7 +2714,7 @@ function ProductEdit() {
               ))}
             </div>
 
-            {/* ── Danger Zone ── */}
+            {/* Danger Zone */}
             <div
               style={{
                 padding: "24px",
@@ -1895,8 +2741,8 @@ function ProductEdit() {
                   marginBottom: "16px",
                 }}
               >
-                Once you delete a product, this action cannot be undone. Please
-                be certain.
+                Once you delete this product, the action cannot be undone.
+                Please be certain before proceeding.
               </p>
               <button
                 type="button"

@@ -1,4 +1,3 @@
-// productService.js
 import { instance } from "./axios.config.js";
 
 export const productService = {
@@ -9,8 +8,8 @@ export const productService = {
       const formData = new FormData();
 
       const variants = productData.variants || [];
-      // extract files belonging to variant images so we can append later
       const variantImageFiles = [];
+
       const sanitizedVariants = variants.map((v, vidx) => {
         const copy = { ...v };
         if (copy.images) {
@@ -25,72 +24,38 @@ export const productService = {
         return copy;
       });
 
-      /* ===== REQUIRED FIELDS ===== */
-      const requiredFields = [
-        "name",
-        "productKey",
-        "description",
-        "category",
-        "warranty",
-        "returnPolicy",
-      ];
-
+      /* ── Required fields ── */
+      const requiredFields = ["name", "productKey", "description", "category", "warranty", "returnPolicy"];
       requiredFields.forEach((field) => {
-        if (!productData[field]) {
-          throw { message: `${field} is required` };
-        }
+        if (!productData[field]) throw { message: `${field} is required` };
         formData.append(field, productData[field]);
       });
 
-      /* ===== VARIANTS ===== */
-      if (sanitizedVariants.length === 0) {
-        throw { message: "At least one variant is required" };
-      }
+      /* ── Variants ── */
+      if (sanitizedVariants.length === 0) throw { message: "At least one variant is required" };
       formData.append("variants", JSON.stringify(sanitizedVariants));
 
-      /* ===== OPTIONAL FIELDS ===== */
-      const optionalFields = [
-        "slug",
-        "subcategory",
-        "brand",
-        "metaTitle",
-        "metaDescription",
-        "status",
-        "isFeatured",
-        "isRecommended",
-        "isDigital",
-      ];
-
-      optionalFields.forEach(field => {
+      /* ── Optional scalar fields ── */
+      const optionalFields = ["slug", "subcategory", "brand", "metaTitle", "metaDescription", "status", "isFeatured", "isRecommended", "isDigital"];
+      optionalFields.forEach((field) => {
         if (productData[field] !== undefined && productData[field] !== null && productData[field] !== "") {
           formData.append(field, productData[field]);
         }
       });
 
-      /* ===== ARRAY / OBJECT FIELDS ===== */
-      const jsonFields = [
-        "specifications",
-        "keyFeatures",
-        "tags",
-        "keywords",
-        "filterOptions",
-      ];
-      jsonFields.forEach(field => {
-        if (productData[field] && productData[field].length > 0) {
+      /* ── Array / JSON fields ── */
+      const jsonFields = ["specifications", "keyFeatures", "tags", "keywords", "filterOptions"];
+      jsonFields.forEach((field) => {
+        if (productData[field]?.length > 0) {
           formData.append(field, JSON.stringify(productData[field]));
         }
       });
 
-      /* ===== IMAGES ===== */
-      if (!productData.images || productData.images.length === 0) {
-        throw { message: "At least one image is required" };
-      }
+      /* ── Main images ── */
+      if (!productData.images?.length) throw { message: "At least one image is required" };
+      productData.images.forEach((file) => formData.append("images", file));
 
-      productData.images.forEach(file => {
-        formData.append("images", file);
-      });
-
-      // append variant image files after main images
+      /* ── Variant images ── */
       variantImageFiles.forEach((vf) => {
         formData.append(`variantImage_${vf.variantIndex}`, vf.file);
       });
@@ -100,13 +65,11 @@ export const productService = {
       });
 
       return response.data;
-
     } catch (error) {
       console.error("❌ Create product error:", error.response?.data || error);
       throw error.response?.data || error;
     }
   },
-
 
   /* ================= GET ALL PRODUCTS ================= */
   getProducts: async (filters = {}) => {
@@ -114,29 +77,30 @@ export const productService = {
       const response = await instance.get("/products", { params: filters });
       return response.data.products;
     } catch (error) {
-      console.warn("API not available, returning mock products");
-      return mockProducts;
+      console.error("❌ Get products error:", error.response?.data || error);
+      throw error.response?.data || error;
     }
   },
 
-
   /* ================= GET PRODUCT BY ID ================= */
   getProductById: async (id) => {
-    const res = await instance.get(`/products/${id}`);
-    return res.data;
+    try {
+      const res = await instance.get(`/products/${id}`);
+      return res.data;
+    } catch (error) {
+      console.error("❌ Get product error:", error.response?.data || error);
+      throw error.response?.data || error;
+    }
   },
-
 
   /* ================= UPDATE PRODUCT ================= */
   updateProduct: async (id, productData) => {
     try {
       const formData = new FormData();
 
-      const variants = productData.variants?.length ? productData.variants : [];
-      const isVariantProduct = variants.length > 0;
-
-      // handle variant image files similar to create
+      const variants = productData.variants || [];
       const variantImageFiles = [];
+
       const sanitizedVariants = variants.map((v, vidx) => {
         const copy = { ...v };
         if (copy.images) {
@@ -151,31 +115,55 @@ export const productService = {
         return copy;
       });
 
-      Object.entries(productData).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && key !== "images") {
-          if (key === "variants" && isVariantProduct) {
-            formData.append("variants", JSON.stringify(sanitizedVariants));
-          } else if (Array.isArray(value) || typeof value === "object") {
-            formData.append(key, JSON.stringify(value));
-          } else {
-            formData.append(key, value);
-          }
+      /* ── Scalar fields ── */
+      const scalarFields = [
+        "name", "slug", "productKey", "description", "category",
+        "subcategory", "brand", "warranty", "returnPolicy",
+        "status", "isFeatured", "isRecommended", "isDigital",
+        "allowBackorder", "metaTitle", "metaDescription",
+      ];
+      scalarFields.forEach((field) => {
+        if (productData[field] !== undefined && productData[field] !== null) {
+          formData.append(field, productData[field]);
         }
       });
 
-      if (isVariantProduct) {
-        formData.delete("sku");
-        formData.delete("sellingPrice");
-        formData.delete("mrp");
+      /* ── JSON / Array fields ── */
+      const jsonFields = ["specifications", "keyFeatures", "tags", "keywords", "filterOptions"];
+      jsonFields.forEach((field) => {
+        if (productData[field] !== undefined) {
+          formData.append(field, JSON.stringify(productData[field]));
+        }
+      });
+
+      /* ── Variants ── */
+      if (sanitizedVariants.length > 0) {
+        formData.append("variants", JSON.stringify(sanitizedVariants));
       }
 
-      if (productData.images?.length) {
-        productData.images.forEach(file => {
-          formData.append("images", file);
-        });
+      /* ── existingImages — backend ko batao kaunsi purani images rakhni hain ── */
+      if (productData.existingImages !== undefined) {
+        formData.append(
+          "existingImages",
+          JSON.stringify(
+            productData.existingImages.map((img) =>
+              typeof img === "string" ? img : img.public_id
+            )
+          )
+        );
       }
 
-      // append any variant image files
+      /* ── imagesToDelete — kaunsi delete karni hain ── */
+      if (productData.imagesToDelete?.length > 0) {
+        formData.append("imagesToDelete", JSON.stringify(productData.imagesToDelete));
+      }
+
+      /* ── Nayi main images (File objects) ── */
+      if (productData.newImageFiles?.length > 0) {
+        productData.newImageFiles.forEach((file) => formData.append("images", file));
+      }
+
+      /* ── Variant images ── */
       variantImageFiles.forEach((vf) => {
         formData.append(`variantImage_${vf.variantIndex}`, vf.file);
       });
@@ -185,18 +173,20 @@ export const productService = {
       });
 
       return res.data;
-
     } catch (error) {
       console.error("❌ Update product error:", error.response?.data || error);
       throw error.response?.data || error;
     }
   },
 
-
   /* ================= DELETE PRODUCT ================= */
   deleteProduct: async (id) => {
-    const res = await instance.delete(`/products/${id}`);
-    return res.data;
-  }
-
+    try {
+      const res = await instance.delete(`/products/${id}`);
+      return res.data;
+    } catch (error) {
+      console.error("❌ Delete product error:", error.response?.data || error);
+      throw error.response?.data || error;
+    }
+  },
 };

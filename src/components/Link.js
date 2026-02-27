@@ -46,13 +46,13 @@ const sidebarLinks = [
     match: "/categories",
     roles: ["admin"],
   },
-  {
-    label: "Brands",
-    path: "/brands/list",
-    icon: MdGroup,
-    match: "/brands",
-    roles: ["admin"],
-  },
+  // {
+  //   label: "Brands",
+  //   path: "/brands/list",
+  //   icon: MdGroup,
+  //   match: "/brands",
+  //   roles: ["admin"],
+  // },
   {
     label: "Inventory",
     path: "/inventory",
@@ -149,13 +149,13 @@ const sidebarLinks = [
     match: "/blogs",
     roles: ["admin"],
   },
-  {
-    label: "Roles",
-    path: "/roles",
-    icon: MdAdminPanelSettings,
-    match: "/roles",
-    roles: ["admin"],
-  },
+  // {
+  //   label: "Roles",
+  //   path: "/roles",
+  //   icon: MdAdminPanelSettings,
+  //   match: "/roles",
+  //   roles: ["admin"],
+  // },
   {
     label: "Settings",
     path: "/settings",

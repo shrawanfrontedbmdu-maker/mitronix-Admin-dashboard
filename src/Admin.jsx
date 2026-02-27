@@ -67,7 +67,7 @@ import Store from "./pages/stores/Store";
 import AddStore from "./pages/stores/AddStore";
 import { Filters } from "./pages/Filters";
 import NotificationDashboard from "./pages/NotificationDashboard";
-import DelayBanners from "./pages/DelayBanners"
+import DelayBanners from "./pages/DelayBanners";
 import DelayBannerCreate from "./pages/DelayBannerCreate";
 import DelayBannerupdate from "./pages/DelayBannerupdate";
 function Admin() {
@@ -119,10 +119,13 @@ function Admin() {
   return (
     <div className="app">
       {isAuthenticated && <Sidebar onLogout={handleLogout} />}
-      <div className={`main-content ${isAuthenticated ? '' : 'auth-page'}`}>
+      <div className={`main-content ${isAuthenticated ? "" : "auth-page"}`}>
         <Routes>
           {/* Auth Routes */}
-          <Route index element={isAuthenticated ? <Dashboard /> : <Login role={"admin"} />} />
+          <Route
+            index
+            element={isAuthenticated ? <Dashboard /> : <Login role={"admin"} />}
+          />
 
           {isAuthenticated ? (
             <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
@@ -180,12 +183,12 @@ function Admin() {
               <Route path="invoices/edit/:id" element={<InvoiceEdit />} />
               <Route path="invoices" element={<InvoicesList />} />
 
-            {/* Settings & Profile & Notifications */}
-            <Route path="settings" element={<Settings />} />
-            <Route path="profile" element={<Profile />} />
-            <Route path="profle/edit" element={<Editprofile />} />
-            <Route path="notifications" element={<NotificationDashboard />} />
-            <Route path="service-request" element={<ServiceRequestList />} />
+              {/* Settings & Profile & Notifications */}
+              <Route path="settings" element={<Settings />} />
+              <Route path="profile" element={<Profile />} />
+              <Route path="profle/edit" element={<Editprofile />} />
+              <Route path="notifications" element={<NotificationDashboard />} />
+              <Route path="service-request" element={<ServiceRequestList />} />
 
               {/*Coupons Routes  */}
               <Route path="coupons/list" element={<CouponsList />} />
@@ -195,10 +198,10 @@ function Admin() {
               <Route path="coupons/update/:id" element={<Couponsedit />} />
 
               {/*Customer Route */}
-              <Route path="customer/list" element={<CustomerList />} />
-              <Route path="customer/refferal" element={<CustomerRefferal />} />
-              <Route path="customer/profile" element={<UserProfile />} />
-              <Route path="customer/profile/:id" element={<UserProfile />} />
+              <Route path="customers/list" element={<CustomerList />} />
+              <Route path="customers/refferal" element={<CustomerRefferal />} />
+              <Route path="customers/profile" element={<UserProfile />} />
+              <Route path="customers/profile/:id" element={<UserProfile />} />
               {/* Service Requests Routes */}
               <Route path="service-requests" element={<ServiceRequestList />} />
               <Route
@@ -228,17 +231,23 @@ function Admin() {
 
               {/*Delay Banners */}
               <Route path="delay-banners" element={<DelayBanners />} />
-              <Route path="delay-banners/create" element={<DelayBannerCreate />} />
-              <Route path="delay-banners/update/:id" element={<DelayBannerupdate />} />
+              <Route
+                path="delay-banners/create"
+                element={<DelayBannerCreate />}
+              />
+              <Route
+                path="delay-banners/update/:id"
+                element={<DelayBannerupdate />}
+              />
               {/* Role Routes */}
               <Route path="roles" element={<RoleList />} />
               <Route path="roles/create" element={<CreateRole />} />
               <Route path="roles/:id" element={<RoleDetails />} />
               <Route path="roles/edit/:id" element={<RoleEdit />} />
 
-            <Route path="filters" element={<Filters />} />
+              <Route path="filters" element={<Filters />} />
 
-            {/* Placeholder routes for other nav items */}
+              {/* Placeholder routes for other nav items */}
 
               <Route
                 path="permissions"
@@ -256,18 +265,8 @@ function Admin() {
                   </div>
                 }
               />
-              <Route
-                path="stores/list"
-                element={
-                  <Store />
-                }
-              />
-              <Route
-                path="stores/create"
-                element={
-                  <AddStore />
-                }
-              />
+              <Route path="stores/list" element={<Store />} />
+              <Route path="stores/create" element={<AddStore />} />
             </Route>
           ) : (
             <Route path="*" element={<Login role={"admin"} />} />

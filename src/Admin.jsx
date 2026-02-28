@@ -70,6 +70,7 @@ import NotificationDashboard from "./pages/NotificationDashboard";
 import DelayBanners from "./pages/DelayBanners";
 import DelayBannerCreate from "./pages/DelayBannerCreate";
 import DelayBannerupdate from "./pages/DelayBannerupdate";
+import CustomerDetail from "./pages/CustomersDetail";
 function Admin() {
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
@@ -199,6 +200,7 @@ function Admin() {
 
               {/*Customer Route */}
               <Route path="customers/list" element={<CustomerList />} />
+              <Route path="customers/detail/:id" element={<CustomerDetail />} />
               <Route path="customers/refferal" element={<CustomerRefferal />} />
               <Route path="customers/profile" element={<UserProfile />} />
               <Route path="customers/profile/:id" element={<UserProfile />} />

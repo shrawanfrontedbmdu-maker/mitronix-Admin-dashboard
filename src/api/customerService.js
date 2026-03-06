@@ -39,6 +39,21 @@ export const customerService = {
     },
 
     // ─────────────────────────────────────────────
+    // GET orders by user ID
+    // GET /orders?userId=:id
+    // ─────────────────────────────────────────────
+    getOrdersByUserId: async (userId) => {
+        try {
+            const response = await instance.get(`/orders`, {
+                params: { userId }
+            });
+            return response.data; // { success, orders, total, totalPages }
+        } catch (error) {
+            throw new Error(error.response?.data?.message || error.message || 'An error occurred');
+        }
+    },
+
+    // ─────────────────────────────────────────────
     // POST register new customer (with optional image)
     // POST /customer/register
     // ─────────────────────────────────────────────

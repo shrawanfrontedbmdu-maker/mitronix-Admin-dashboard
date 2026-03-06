@@ -54,7 +54,6 @@ function CreateProduct() {
         if (categoryList.length > 0) {
           const firstId = categoryList[0]._id;
           setFormData((prev) => ({ ...prev, category: firstId }));
-          // load related subcategories and filters
           loadSubcategories(firstId);
           loadFilterGroups(firstId);
         }
@@ -82,7 +81,6 @@ function CreateProduct() {
       .replace(/^-+|-+$/g, "");
   };
 
-  // fetch subcategories for chosen category
   const loadSubcategories = async (categoryId) => {
     if (!categoryId) return;
     try {
@@ -120,11 +118,9 @@ function CreateProduct() {
       const newData = { ...prev, [name]: val };
       if (name === "name") newData.slug = generateSlug(val);
 
-      // when category changes, reset dependent values and reload lists
       if (name === "category") {
         newData.subcategory = "";
         newData.filterOptions = [];
-        // clear previous lists while loading new ones
         setSubcategories([]);
         setFilterGroups([]);
         loadSubcategories(val);
@@ -173,12 +169,7 @@ function CreateProduct() {
 
   const addVariantSpecification = (variantIndex) => {
     const updatedVariants = [...formData.variants];
-
-    updatedVariants[variantIndex].specifications.push({
-      key: "",
-      value: "",
-    });
-
+    updatedVariants[variantIndex].specifications.push({ key: "", value: "" });
     setFormData({ ...formData, variants: updatedVariants });
   };
 
@@ -189,28 +180,19 @@ function CreateProduct() {
     value,
   ) => {
     const updatedVariants = [...formData.variants];
-
     updatedVariants[variantIndex].specifications[specIndex][field] = value;
-
     setFormData({ ...formData, variants: updatedVariants });
   };
 
   const removeVariantSpecification = (variantIndex, specIndex) => {
     const updatedVariants = [...formData.variants];
-
     updatedVariants[variantIndex].specifications.splice(specIndex, 1);
-
     setFormData({ ...formData, variants: updatedVariants });
   };
 
   const addVariantKeyFeature = (variantIndex) => {
     const updatedVariants = [...formData.variants];
-
-    updatedVariants[variantIndex].keyFeatures.push({
-      key: "",
-      value: "",
-    });
-
+    updatedVariants[variantIndex].keyFeatures.push({ key: "", value: "" });
     setFormData({ ...formData, variants: updatedVariants });
   };
 
@@ -221,17 +203,13 @@ function CreateProduct() {
     value,
   ) => {
     const updatedVariants = [...formData.variants];
-
     updatedVariants[variantIndex].keyFeatures[featureIndex][field] = value;
-
     setFormData({ ...formData, variants: updatedVariants });
   };
 
   const removeVariantKeyFeature = (variantIndex, featureIndex) => {
     const updatedVariants = [...formData.variants];
-
     updatedVariants[variantIndex].keyFeatures.splice(featureIndex, 1);
-
     setFormData({ ...formData, variants: updatedVariants });
   };
 
@@ -302,7 +280,7 @@ function CreateProduct() {
     setImages((prev) => [...prev, ...newImages]);
   };
 
-  // variant-specific image helpers
+  // ✅ Variant-specific image upload
   const handleVariantImageUpload = (variantIndex, files) => {
     const validTypes = [
       "image/jpeg",
@@ -314,7 +292,7 @@ function CreateProduct() {
 
     const updated = [...formData.variants];
     const existing = updated[variantIndex]?.images || [];
-    const max = 3; // allow up to 3 images per variant
+    const max = 3;
     const remaining = max - existing.length;
     const filesToProcess = Array.from(files).slice(0, remaining);
 
@@ -352,6 +330,7 @@ function CreateProduct() {
     );
     setFormData((prev) => ({ ...prev, variants: updated }));
   };
+
   const handleFileSelect = (e) => handleImageUpload(e.target.files);
   const handleDrop = (e) => {
     e.preventDefault();
@@ -402,7 +381,11 @@ function CreateProduct() {
       const slug = generateSlug(formData.name);
       const productKey = formData.productKey || slug + "-" + Date.now();
 
-      const cleanedVariants = formData.variants.filter((v) => v.sku || v.price);
+      // ✅ FIX: images wale variants bhi include karo, sirf sku/price pe drop mat karo
+      const cleanedVariants = formData.variants.filter(
+        (v) => v.sku || v.price || v.images?.length > 0,
+      );
+
       if (cleanedVariants.length === 0) {
         setError("At least one variant is required");
         return;
@@ -419,12 +402,12 @@ function CreateProduct() {
         brand: formData.brand || undefined,
         specifications: formData.specifications.filter((s) => s.key || s.value),
         keyFeatures: formData.keyFeatures.filter((kf) => kf.key || kf.value),
+        // ✅ variant.images mein { file, preview, id } objects hain
+        // productService.createProduct inhe extract karke variantImage_N se FormData mein append karta hai
         variants: cleanedVariants.map((v) => ({
           sku:
             v.sku ||
-            `${productKey}-${v.attributes?.color || "NA"}-${
-              v.attributes?.size || "NA"
-            }-${Date.now()}`,
+            `${productKey}-${v.attributes?.color || "NA"}-${v.attributes?.size || "NA"}-${Date.now()}`,
           price: v.price ? parseFloat(v.price) : 0,
           mrp: v.mrp ? parseFloat(v.mrp) : undefined,
           currency: v.currency || "INR",
@@ -653,7 +636,7 @@ function CreateProduct() {
           )}
 
           <div style={{ padding: "32px" }}>
-            {/* Product Media */}
+            {/* ── Product Media ── */}
             <div style={{ marginBottom: "32px" }}>
               <h3
                 style={{
@@ -665,7 +648,6 @@ function CreateProduct() {
               >
                 Product Media (Images & Video)
               </h3>
-
               <div
                 onClick={() => document.getElementById("file-input").click()}
                 onDrop={handleDrop}
@@ -703,7 +685,6 @@ function CreateProduct() {
                     : "PNG, JPG, GIF and WebP (Max 5 images, 5MB each)"}
                 </div>
               </div>
-
               <input
                 id="file-input"
                 type="file"
@@ -712,7 +693,6 @@ function CreateProduct() {
                 onChange={handleFileSelect}
                 style={{ display: "none" }}
               />
-
               {images.length > 0 && (
                 <div
                   style={{
@@ -770,7 +750,7 @@ function CreateProduct() {
               )}
             </div>
 
-            {/* Name */}
+            {/* ── Name ── */}
             <div style={{ marginBottom: "24px" }}>
               <label
                 style={{
@@ -804,7 +784,7 @@ function CreateProduct() {
               />
             </div>
 
-            {/* URL Slug/SEO */}
+            {/* ── Slug ── */}
             <div
               style={{
                 display: "grid",
@@ -846,7 +826,7 @@ function CreateProduct() {
               </div>
             </div>
 
-            {/* Brand/Category */}
+            {/* ── Brand / Category / Subcategory ── */}
             <div
               style={{
                 display: "grid",
@@ -922,8 +902,6 @@ function CreateProduct() {
                   ))}
                 </select>
               </div>
-
-              {/* Subcategory dropdown - dependent on selected category */}
               <div>
                 <label
                   style={{
@@ -963,7 +941,7 @@ function CreateProduct() {
               </div>
             </div>
 
-            {/* Filter groups/options section */}
+            {/* ── Filter Options ── */}
             {filterGroups.length > 0 && (
               <div style={{ marginBottom: "24px" }}>
                 <h4
@@ -1021,7 +999,7 @@ function CreateProduct() {
               </div>
             )}
 
-            {/* Product Key */}
+            {/* ── Product Key ── */}
             <div style={{ marginBottom: "24px" }}>
               <label
                 style={{
@@ -1054,7 +1032,7 @@ function CreateProduct() {
               />
             </div>
 
-            {/* Status/Select Material */}
+            {/* ── Status / Stock Status ── */}
             <div
               style={{
                 display: "grid",
@@ -1130,7 +1108,7 @@ function CreateProduct() {
               </div>
             </div>
 
-            {/* Product Categories */}
+            {/* ── Product Categories placeholder ── */}
             <div style={{ marginBottom: "24px" }}>
               <label
                 style={{
@@ -1167,7 +1145,7 @@ function CreateProduct() {
               </div>
             </div>
 
-            {/* Description */}
+            {/* ── Description ── */}
             <div style={{ marginBottom: "24px" }}>
               <label
                 style={{
@@ -1202,7 +1180,7 @@ function CreateProduct() {
               />
             </div>
 
-            {/* Shipping & Return Policy */}
+            {/* ── Warranty & Return Policy ── */}
             <div style={{ marginBottom: "24px" }}>
               <label
                 style={{
@@ -1236,7 +1214,6 @@ function CreateProduct() {
                 onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
                 onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
               />
-
               <label
                 style={{
                   display: "block",
@@ -1270,7 +1247,7 @@ function CreateProduct() {
               />
             </div>
 
-            {/* Specifications */}
+            {/* ── Specifications ── */}
             <div style={{ marginBottom: "24px" }}>
               <div
                 style={{
@@ -1365,7 +1342,7 @@ function CreateProduct() {
               ))}
             </div>
 
-            {/* Key Features */}
+            {/* ── Key Features ── */}
             <div style={{ marginBottom: "32px" }}>
               <div
                 style={{
@@ -1462,7 +1439,7 @@ function CreateProduct() {
               ))}
             </div>
 
-            {/* Additional fields - Tags, SEO etc */}
+            {/* ── Tags & Keywords ── */}
             <div
               style={{
                 display: "grid",
@@ -1549,7 +1526,7 @@ function CreateProduct() {
               </div>
             </div>
 
-            {/* Variants */}
+            {/* ── Variants ── */}
             {formData.variants.length > 0 && (
               <div style={{ marginBottom: "32px" }}>
                 <h3
@@ -1573,6 +1550,7 @@ function CreateProduct() {
                       backgroundColor: "#fafafa",
                     }}
                   >
+                    {/* Variant header */}
                     <div
                       style={{
                         display: "flex",
@@ -1589,6 +1567,10 @@ function CreateProduct() {
                         }}
                       >
                         Variant {index + 1}
+                        {variant.attributes?.color &&
+                          ` — ${variant.attributes.color}`}
+                        {variant.attributes?.size &&
+                          ` / ${variant.attributes.size}`}
                       </h4>
                       <button
                         type="button"
@@ -1607,6 +1589,8 @@ function CreateProduct() {
                         Remove
                       </button>
                     </div>
+
+                    {/* Attributes */}
                     <div
                       style={{
                         display: "grid",
@@ -1713,7 +1697,8 @@ function CreateProduct() {
                         />
                       </div>
                     </div>
-                    {/* Pricing Section */}
+
+                    {/* Pricing */}
                     <div
                       style={{
                         display: "grid",
@@ -1740,7 +1725,6 @@ function CreateProduct() {
                           }}
                         />
                       </div>
-
                       <div>
                         <label>Price</label>
                         <input
@@ -1763,7 +1747,6 @@ function CreateProduct() {
                           }}
                         />
                       </div>
-
                       <div>
                         <label>MRP</label>
                         <input
@@ -1786,7 +1769,6 @@ function CreateProduct() {
                           }}
                         />
                       </div>
-
                       <div>
                         <label>Stock Quantity*</label>
                         <input
@@ -1810,7 +1792,6 @@ function CreateProduct() {
                           }}
                         />
                       </div>
-
                       <div>
                         <label>Currency</label>
                         <select
@@ -1837,10 +1818,10 @@ function CreateProduct() {
                         </select>
                       </div>
                     </div>
+
                     {/* Dimensions */}
                     <div style={{ marginTop: "16px" }}>
                       <h5 style={{ marginBottom: "8px" }}>Dimensions</h5>
-
                       <div
                         style={{
                           display: "grid",
@@ -1868,7 +1849,6 @@ function CreateProduct() {
                             outline: "none",
                           }}
                         />
-
                         <input
                           type="number"
                           placeholder="Length"
@@ -1889,7 +1869,6 @@ function CreateProduct() {
                             outline: "none",
                           }}
                         />
-
                         <input
                           type="number"
                           placeholder="Width"
@@ -1910,7 +1889,6 @@ function CreateProduct() {
                             outline: "none",
                           }}
                         />
-
                         <input
                           type="number"
                           placeholder="Height"
@@ -1933,9 +1911,9 @@ function CreateProduct() {
                         />
                       </div>
                     </div>
-                    {/* ===== SPECIFICATIONS ===== */}
-                    <h4>Specifications</h4>
 
+                    {/* Variant Specifications */}
+                    <h4>Specifications</h4>
                     {variant.specifications.map((spec, specIndex) => (
                       <div
                         key={specIndex}
@@ -1959,7 +1937,6 @@ function CreateProduct() {
                             )
                           }
                         />
-
                         <input
                           type="text"
                           placeholder="Value"
@@ -1973,7 +1950,6 @@ function CreateProduct() {
                             )
                           }
                         />
-
                         <button
                           type="button"
                           onClick={() =>
@@ -1984,7 +1960,6 @@ function CreateProduct() {
                         </button>
                       </div>
                     ))}
-
                     <button
                       type="button"
                       onClick={() => addVariantSpecification(index)}
@@ -1992,9 +1967,8 @@ function CreateProduct() {
                       + Add Specification
                     </button>
 
-                    {/* ===== KEY FEATURES ===== */}
+                    {/* Variant Key Features */}
                     <h4>Key Features</h4>
-
                     {variant.keyFeatures.map((feature, featureIndex) => (
                       <div
                         key={featureIndex}
@@ -2018,7 +1992,6 @@ function CreateProduct() {
                             )
                           }
                         />
-
                         <input
                           type="text"
                           placeholder="Value"
@@ -2032,7 +2005,6 @@ function CreateProduct() {
                             )
                           }
                         />
-
                         <button
                           type="button"
                           onClick={() =>
@@ -2043,7 +2015,6 @@ function CreateProduct() {
                         </button>
                       </div>
                     ))}
-
                     <button
                       type="button"
                       onClick={() => addVariantKeyFeature(index)}
@@ -2051,26 +2022,40 @@ function CreateProduct() {
                       + Add Feature
                     </button>
 
-                    {/* Variant images upload */}
-                    <div style={{ marginTop: "12px" }}>
+                    {/* ✅ Variant Images Upload Section */}
+                    <div style={{ marginTop: "16px" }}>
                       <label
                         style={{
                           display: "block",
                           fontSize: "13px",
-                          fontWeight: "500",
-                          marginBottom: "6px",
+                          fontWeight: "600",
+                          marginBottom: "8px",
                           color: "#374151",
                         }}
                       >
                         Variant Images (max 3)
+                        {variant.attributes?.color && (
+                          <span
+                            style={{
+                              fontWeight: "400",
+                              color: "#6b7280",
+                              marginLeft: "6px",
+                            }}
+                          >
+                            — {variant.attributes.color}
+                          </span>
+                        )}
                       </label>
+
                       <div
                         style={{
                           display: "flex",
                           gap: "8px",
                           flexWrap: "wrap",
+                          alignItems: "center",
                         }}
                       >
+                        {/* Preview uploaded images */}
                         {(variant.images || []).map((img) => (
                           <div
                             key={img.id || img.url}
@@ -2080,10 +2065,11 @@ function CreateProduct() {
                               src={img.preview || img.url}
                               alt="variant"
                               style={{
-                                width: "60px",
-                                height: "60px",
+                                width: "72px",
+                                height: "72px",
                                 objectFit: "cover",
-                                borderRadius: "4px",
+                                borderRadius: "6px",
+                                border: "1px solid #e5e7eb",
                               }}
                             />
                             <button
@@ -2100,8 +2086,11 @@ function CreateProduct() {
                                 width: "20px",
                                 height: "20px",
                                 cursor: "pointer",
-                                fontSize: "12px",
-                                lineHeight: "20px",
+                                fontSize: "13px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                lineHeight: 1,
                               }}
                             >
                               ×
@@ -2109,21 +2098,37 @@ function CreateProduct() {
                           </div>
                         ))}
 
-                        {variant.images?.length < 3 && (
+                        {/* Upload button — only if under limit */}
+                        {(variant.images?.length || 0) < 3 && (
                           <label
                             style={{
-                              display: "inline-block",
-                              width: "60px",
-                              height: "60px",
-                              border: "1px dashed #d1d5db",
-                              borderRadius: "4px",
-                              textAlign: "center",
-                              lineHeight: "60px",
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              width: "72px",
+                              height: "72px",
+                              border: "2px dashed #d1d5db",
+                              borderRadius: "6px",
                               cursor: "pointer",
                               color: "#6b7280",
+                              fontSize: "24px",
+                              backgroundColor: "#fafafa",
+                              transition: "border-color 0.2s",
                             }}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.borderColor = "#3b82f6")
+                            }
+                            onMouseLeave={(e) =>
+                              (e.currentTarget.style.borderColor = "#d1d5db")
+                            }
                           >
                             +
+                            <span
+                              style={{ fontSize: "10px", marginTop: "2px" }}
+                            >
+                              {variant.images?.length || 0}/3
+                            </span>
                             <input
                               type="file"
                               accept="image/*"
@@ -2136,6 +2141,17 @@ function CreateProduct() {
                           </label>
                         )}
                       </div>
+
+                      <p
+                        style={{
+                          fontSize: "12px",
+                          color: "#9ca3af",
+                          marginTop: "6px",
+                        }}
+                      >
+                        Ye images tab dikhegi jab user ye variant select kare.
+                        PNG, JPG, WebP (max 5MB each)
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -2161,7 +2177,7 @@ function CreateProduct() {
             </button>
           </div>
 
-          {/* Checkboxes */}
+          {/* ── Checkboxes ── */}
           <div
             style={{
               marginBottom: "32px",
@@ -2170,85 +2186,36 @@ function CreateProduct() {
               flexWrap: "wrap",
             }}
           >
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "14px",
-                color: "#374151",
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                name="isRecommended"
-                checked={formData.isRecommended}
-                onChange={handleInputChange}
-                style={{ width: "16px", height: "16px", cursor: "pointer" }}
-              />
-              Recommended Product
-            </label>
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "14px",
-                color: "#374151",
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                name="isFeatured"
-                checked={formData.isFeatured}
-                onChange={handleInputChange}
-                style={{ width: "16px", height: "16px", cursor: "pointer" }}
-              />
-              Featured Product
-            </label>
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "14px",
-                color: "#374151",
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                name="isDigital"
-                checked={formData.isDigital}
-                onChange={handleInputChange}
-                style={{ width: "16px", height: "16px", cursor: "pointer" }}
-              />
-              Digital Product
-            </label>
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "14px",
-                color: "#374151",
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                name="allowBackorder"
-                checked={formData.allowBackorder}
-                onChange={handleInputChange}
-                style={{ width: "16px", height: "16px", cursor: "pointer" }}
-              />
-              Allow Backorder
-            </label>
+            {[
+              { name: "isRecommended", label: "Recommended Product" },
+              { name: "isFeatured", label: "Featured Product" },
+              { name: "isDigital", label: "Digital Product" },
+              { name: "allowBackorder", label: "Allow Backorder" },
+            ].map(({ name, label }) => (
+              <label
+                key={name}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "14px",
+                  color: "#374151",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  name={name}
+                  checked={formData[name] || false}
+                  onChange={handleInputChange}
+                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                />
+                {label}
+              </label>
+            ))}
           </div>
 
-          {/* Footer Actions */}
+          {/* ── Footer Actions ── */}
           <div
             style={{
               padding: "20px 32px",

@@ -7,7 +7,6 @@ import {
   MdEmail,
   MdVerified,
   MdShoppingBag,
-  MdAccountBalanceWallet,
   MdStar,
   MdCheckCircle,
   MdCancel,
@@ -145,12 +144,13 @@ const Tab = ({ label, active, onClick, count }) => (
   </button>
 );
 
-// ─── Orders Table Component ───────────────────────────────────────────────────
+// ─── Orders Tab ───────────────────────────────────────────────────────────────
 function OrdersTab({ orders, filterStatus, navigate }) {
+  const [expandedOrder, setExpandedOrder] = useState(null);
+
   const filtered = filterStatus
     ? orders.filter((o) => o.orderStatus === filterStatus)
     : orders;
-  const [expandedOrder, setExpandedOrder] = useState(null);
 
   if (!orders.length)
     return (
@@ -183,7 +183,9 @@ function OrdersTab({ orders, filterStatus, navigate }) {
         const pt =
           paymentStatusStyle[order.paymentStatus] || paymentStatusStyle.Pending;
         const isExpanded = expandedOrder === (order._id || i);
-        const items = order.items || order.products || [];
+
+        // ✅ Robustly extract items from any structure
+        const items = order.items || order.products || order.orderItems || [];
 
         return (
           <div
@@ -211,7 +213,6 @@ function OrdersTab({ orders, filterStatus, navigate }) {
                 transition: "0.2s",
               }}
             >
-              {/* Order ID */}
               <div style={{ minWidth: 120 }}>
                 <p
                   style={{
@@ -237,7 +238,6 @@ function OrdersTab({ orders, filterStatus, navigate }) {
                 </p>
               </div>
 
-              {/* Date */}
               <div style={{ minWidth: 100 }}>
                 <p
                   style={{
@@ -262,7 +262,6 @@ function OrdersTab({ orders, filterStatus, navigate }) {
                 </p>
               </div>
 
-              {/* Items Count */}
               <div style={{ minWidth: 70 }}>
                 <p
                   style={{
@@ -287,7 +286,6 @@ function OrdersTab({ orders, filterStatus, navigate }) {
                 </p>
               </div>
 
-              {/* Amount */}
               <div style={{ minWidth: 90 }}>
                 <p
                   style={{
@@ -308,11 +306,16 @@ function OrdersTab({ orders, filterStatus, navigate }) {
                     color: "#0f172a",
                   }}
                 >
-                  ₹{(order.totalAmount || 0).toLocaleString("en-IN")}
+                  ₹
+                  {(
+                    order.totalAmount ||
+                    order.grandTotal ||
+                    order.total ||
+                    0
+                  ).toLocaleString("en-IN")}
                 </p>
               </div>
 
-              {/* Order Status */}
               <div
                 style={{
                   flex: 1,
@@ -349,14 +352,13 @@ function OrdersTab({ orders, filterStatus, navigate }) {
                     {order.paymentMethod}
                   </span>
                 )}
-                {/* Expand indicator */}
                 <span style={{ fontSize: 16, color: "#94a3b8", marginLeft: 4 }}>
                   {isExpanded ? "▲" : "▼"}
                 </span>
               </div>
             </div>
 
-            {/* Expanded: Order Items + Address */}
+            {/* Expanded Details */}
             {isExpanded && (
               <div
                 style={{
@@ -387,131 +389,162 @@ function OrdersTab({ orders, filterStatus, navigate }) {
                         gap: 8,
                       }}
                     >
-                      {items.map((item, idx) => (
-                        <div
-                          key={idx}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 12,
-                            background: "#fff",
-                            padding: "10px 12px",
-                            borderRadius: 10,
-                            border: "1px solid #e2e8f0",
-                          }}
-                        >
-                          {item.image || item.productImage ? (
-                            <img
-                              src={item.image || item.productImage}
-                              alt=""
-                              style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: 8,
-                                objectFit: "cover",
-                                border: "1px solid #e2e8f0",
-                                flexShrink: 0,
-                              }}
-                            />
-                          ) : (
-                            <div
-                              style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: 8,
-                                background: "#f1f5f9",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                flexShrink: 0,
-                              }}
-                            >
-                              <MdShoppingBag size={20} color="#94a3b8" />
-                            </div>
-                          )}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <p
-                              style={{
-                                margin: 0,
-                                fontSize: 13,
-                                fontWeight: 600,
-                                color: "#0f172a",
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                              }}
-                            >
-                              {item.name || item.productName || "Product"}
-                            </p>
-                            <div
-                              style={{
-                                display: "flex",
-                                gap: 10,
-                                marginTop: 3,
-                                flexWrap: "wrap",
-                              }}
-                            >
-                              {item.variant && (
-                                <span
-                                  style={{ fontSize: 11, color: "#94a3b8" }}
-                                >
-                                  Variant: {item.variant}
-                                </span>
-                              )}
-                              {item.size && (
-                                <span
-                                  style={{ fontSize: 11, color: "#94a3b8" }}
-                                >
-                                  Size: {item.size}
-                                </span>
-                              )}
-                              {item.color && (
-                                <span
-                                  style={{ fontSize: 11, color: "#94a3b8" }}
-                                >
-                                  Color: {item.color}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div style={{ textAlign: "right", flexShrink: 0 }}>
-                            <p
-                              style={{
-                                margin: 0,
-                                fontSize: 12,
-                                color: "#64748b",
-                              }}
-                            >
-                              Qty: <b>{item.quantity || item.qty || 1}</b>
-                            </p>
-                            <p
-                              style={{
-                                margin: 0,
-                                fontSize: 13,
-                                fontWeight: 700,
-                                color: "#0f172a",
-                              }}
-                            >
-                              ₹
-                              {(
-                                (item.unitPrice || item.price || item.sellingPrice || 0) *
-                                (item.quantity || item.qty || 1)
-                              ).toLocaleString("en-IN")}
-                            </p>
-                            {item.discount > 0 && (
+                      {items.map((item, idx) => {
+                        // ✅ Handle nested product reference
+                        const productName =
+                          item.name ||
+                          item.productName ||
+                          item.product?.name ||
+                          item.productId?.name ||
+                          "Product";
+                        // ✅ FIX: backend sends resolved image in item.image
+                        // fallback: variant imageUrl → product images array
+                        const productImage =
+                          (item.image &&
+                          item.image !== "null" &&
+                          item.image !== ""
+                            ? item.image
+                            : null) ||
+                          item.productImage ||
+                          (Array.isArray(item.productId?.variants)
+                            ? item.productId.variants.find(
+                                (v) => v.sku === item.sku,
+                              )?.imageUrl
+                            : null) ||
+                          item.productId?.images?.[0] ||
+                          item.product?.images?.[0] ||
+                          null;
+                        const unitPrice =
+                          item.unitPrice ||
+                          item.price ||
+                          item.sellingPrice ||
+                          item.product?.sellingPrice ||
+                          item.productId?.sellingPrice ||
+                          0;
+                        const qty = item.quantity || item.qty || 1;
+
+                        return (
+                          <div
+                            key={idx}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 12,
+                              background: "#fff",
+                              padding: "10px 12px",
+                              borderRadius: 10,
+                              border: "1px solid #e2e8f0",
+                            }}
+                          >
+                            {productImage ? (
+                              <img
+                                src={productImage}
+                                alt=""
+                                style={{
+                                  width: 44,
+                                  height: 44,
+                                  borderRadius: 8,
+                                  objectFit: "cover",
+                                  border: "1px solid #e2e8f0",
+                                  flexShrink: 0,
+                                }}
+                              />
+                            ) : (
+                              <div
+                                style={{
+                                  width: 44,
+                                  height: 44,
+                                  borderRadius: 8,
+                                  background: "#f1f5f9",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <MdShoppingBag size={20} color="#94a3b8" />
+                              </div>
+                            )}
+                            <div style={{ flex: 1, minWidth: 0 }}>
                               <p
                                 style={{
                                   margin: 0,
-                                  fontSize: 11,
-                                  color: "#10b981",
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  color: "#0f172a",
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
                                 }}
                               >
-                                -{item.discount}% off
+                                {productName}
                               </p>
-                            )}
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 10,
+                                  marginTop: 3,
+                                  flexWrap: "wrap",
+                                }}
+                              >
+                                {item.variant && (
+                                  <span
+                                    style={{ fontSize: 11, color: "#94a3b8" }}
+                                  >
+                                    Variant: {item.variant}
+                                  </span>
+                                )}
+                                {item.size && (
+                                  <span
+                                    style={{ fontSize: 11, color: "#94a3b8" }}
+                                  >
+                                    Size: {item.size}
+                                  </span>
+                                )}
+                                {item.color && (
+                                  <span
+                                    style={{ fontSize: 11, color: "#94a3b8" }}
+                                  >
+                                    Color: {item.color}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div style={{ textAlign: "right", flexShrink: 0 }}>
+                              <p
+                                style={{
+                                  margin: 0,
+                                  fontSize: 12,
+                                  color: "#64748b",
+                                }}
+                              >
+                                Qty: <b>{qty}</b>
+                              </p>
+                              <p
+                                style={{
+                                  margin: 0,
+                                  fontSize: 13,
+                                  fontWeight: 700,
+                                  color: "#0f172a",
+                                }}
+                              >
+                                ₹{(unitPrice * qty).toLocaleString("en-IN")}
+                              </p>
+                              {item.discount > 0 && (
+                                <p
+                                  style={{
+                                    margin: 0,
+                                    fontSize: 11,
+                                    color: "#10b981",
+                                  }}
+                                >
+                                  -{item.discount}% off
+                                </p>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -597,19 +630,6 @@ function OrdersTab({ orders, filterStatus, navigate }) {
                         <span>₹{order.taxAmount?.toLocaleString("en-IN")}</span>
                       </div>
                     )}
-                    {order.walletUsed > 0 && (
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          fontSize: 12,
-                          color: "#6366f1",
-                        }}
-                      >
-                        <span>Wallet Used</span>
-                        <span>-₹{order.walletUsed}</span>
-                      </div>
-                    )}
                     {order.couponCode && (
                       <div
                         style={{
@@ -637,43 +657,48 @@ function OrdersTab({ orders, filterStatus, navigate }) {
                     >
                       <span>Total</span>
                       <span>
-                        ₹{(order.totalAmount || 0).toLocaleString("en-IN")}
+                        ₹
+                        {(
+                          order.totalAmount ||
+                          order.grandTotal ||
+                          order.total ||
+                          0
+                        ).toLocaleString("en-IN")}
                       </span>
                     </div>
                   </div>
                 </div>
 
                 {/* Delivery Address */}
-                {(order.deliveryAddress || order.shippingAddress) && (
-                  <div
-                    style={{
-                      background: "#fff",
-                      borderRadius: 10,
-                      padding: "12px 14px",
-                      border: "1px solid #e2e8f0",
-                      marginBottom: 14,
-                    }}
-                  >
-                    <p
-                      style={{
-                        margin: "0 0 8px",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: "#0f172a",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 5,
-                      }}
-                    >
-                      <MdLocationOn size={14} color="#6366f1" /> Delivery
-                      Address
-                    </p>
-                    {(() => {
-                      const addr =
-                        order.deliveryAddress || order.shippingAddress;
-                      return (
+                {(order.deliveryAddress || order.shippingAddress) &&
+                  (() => {
+                    const addr = order.deliveryAddress || order.shippingAddress;
+                    return (
+                      <div
+                        style={{
+                          background: "#fff",
+                          borderRadius: 10,
+                          padding: "12px 14px",
+                          border: "1px solid #e2e8f0",
+                          marginBottom: 14,
+                        }}
+                      >
+                        <p
+                          style={{
+                            margin: "0 0 8px",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: "#0f172a",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.05em",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 5,
+                          }}
+                        >
+                          <MdLocationOn size={14} color="#6366f1" /> Delivery
+                          Address
+                        </p>
                         <div
                           style={{
                             fontSize: 12,
@@ -700,10 +725,9 @@ function OrdersTab({ orders, filterStatus, navigate }) {
                           <br />
                           {addr.country}
                         </div>
-                      );
-                    })()}
-                  </div>
-                )}
+                      </div>
+                    );
+                  })()}
 
                 {/* Cancellation Reason */}
                 {order.orderStatus === "Cancelled" &&
@@ -714,6 +738,7 @@ function OrdersTab({ orders, filterStatus, navigate }) {
                         borderRadius: 10,
                         padding: "10px 14px",
                         border: "1px solid #fecaca",
+                        marginBottom: 10,
                       }}
                     >
                       <p
@@ -757,6 +782,7 @@ function OrdersTab({ orders, filterStatus, navigate }) {
                       borderRadius: 10,
                       padding: "10px 14px",
                       border: "1px solid #e9d5ff",
+                      marginBottom: 10,
                     }}
                   >
                     <p
@@ -815,13 +841,13 @@ function OrdersTab({ orders, filterStatus, navigate }) {
                   </div>
                 )}
 
-                {/* View Full Order Button */}
+                {/* View Full Order */}
                 {order._id && navigate && (
                   <div style={{ marginTop: 12, textAlign: "right" }}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        navigate(`/orders/${order._id}`);
+                        navigate(`/admin/orders/${order._id}`);
                       }}
                       style={{
                         fontSize: 12,
@@ -867,9 +893,20 @@ export default function CustomerDetail() {
       ]);
 
       const customerData = customerRes.data || customerRes;
-      const rawOrders = ordersRes.orders || ordersRes.data || [];
 
-      // Normalize orders — flatten backend nested structure to match frontend expectations
+      // 🔍 DEBUG — browser console mein dekho exact API response
+      console.log("📦 RAW ordersRes:", ordersRes);
+      const rawOrders = ordersRes.orders || ordersRes.data || ordersRes || [];
+      console.log("📦 rawOrders:", rawOrders);
+      if (rawOrders.length > 0) {
+        console.log("📦 First order keys:", Object.keys(rawOrders[0]));
+        console.log(
+          "📦 First order sample:",
+          JSON.stringify(rawOrders[0], null, 2),
+        );
+      }
+
+      // ✅ Normalize all possible nested backend structures
       const orders = rawOrders.map((o) => ({
         ...o,
         orderStatus: o.fulfillment?.orderStatus || o.orderStatus || "Pending",
@@ -877,10 +914,13 @@ export default function CustomerDetail() {
         paymentMethod: o.payment?.method || o.paymentMethod || "COD",
         shippingCharge: o.shippingCost ?? o.shippingCharge ?? 0,
         discount: o.discountAmount || o.discount || 0,
-        couponDiscount: o.discountAmount || 0,
+        couponDiscount: o.couponDiscount || o.discountAmount || 0,
+        totalAmount: o.totalAmount || o.grandTotal || o.total || 0,
         trackingId: o.trackingnumber || o.trackingId,
+        items: o.items || o.products || o.orderItems || [],
       }));
 
+      console.log("✅ Normalized first order:", orders[0]);
       setCustomer({ ...customerData, orders });
     } catch (err) {
       setError(err.message);
@@ -1157,7 +1197,7 @@ export default function CustomerDetail() {
             </div>
           </div>
 
-          {/* Stats */}
+          {/* Stats — wallet & reward points removed */}
           <div
             style={{
               display: "flex",
@@ -1202,25 +1242,11 @@ export default function CustomerDetail() {
               bg="#e0e7ff"
             />
             <StatCard
-              icon={<MdAccountBalanceWallet size={20} />}
+              icon={<MdShoppingBag size={20} />}
               label="Total Spent"
               value={`₹${totalSpent.toLocaleString("en-IN")}`}
               color="#f59e0b"
               bg="#fef9c3"
-            />
-            <StatCard
-              icon={<MdAccountBalanceWallet size={20} />}
-              label="Wallet"
-              value={`₹${customer.walletBalance ?? 0}`}
-              color="#06b6d4"
-              bg="#cffafe"
-            />
-            <StatCard
-              icon={<MdStar size={20} />}
-              label="Reward Points"
-              value={customer.rewardPoints ?? 0}
-              color="#8b5cf6"
-              bg="#ede9fe"
             />
           </div>
         </div>
@@ -1253,7 +1279,7 @@ export default function CustomerDetail() {
             />
             <Tab
               label="All Orders"
-              active={activeTab === "orders"}
+              active={activeTab === "orders" && !orderFilter}
               onClick={() => {
                 setActiveTab("orders");
                 setOrderFilter(null);
@@ -1283,11 +1309,6 @@ export default function CustomerDetail() {
               active={activeTab === "addresses"}
               onClick={() => setActiveTab("addresses")}
               count={customer.addresses?.length || 0}
-            />
-            <Tab
-              label="Wallet & Points"
-              active={activeTab === "wallet"}
-              onClick={() => setActiveTab("wallet")}
             />
             <Tab
               label="Reviews"
@@ -1370,8 +1391,6 @@ export default function CustomerDetail() {
                         </span>
                       ),
                     ],
-                    ["Wallet Balance", `₹ ${customer.walletBalance ?? 0}`],
-                    ["Reward Points", `${customer.rewardPoints ?? 0} pts`],
                     ["Referral Code", customer.referralCode || "—"],
                     ["Total Orders", orders.length],
                     ["Delivered", delivered],
@@ -1411,7 +1430,6 @@ export default function CustomerDetail() {
                   ))}
                 </div>
 
-                {/* Recent Orders Preview in Overview */}
                 {orders.length > 0 && (
                   <div>
                     <div
@@ -1459,10 +1477,9 @@ export default function CustomerDetail() {
               </div>
             )}
 
-            {/* ALL ORDERS / FILTERED ORDERS */}
+            {/* ALL / FILTERED ORDERS */}
             {activeTab === "orders" && (
               <div>
-                {/* Quick filter pills */}
                 <div
                   style={{
                     display: "flex",
@@ -1690,199 +1707,6 @@ export default function CustomerDetail() {
                   ))}
                 </div>
               ))}
-
-            {/* WALLET & POINTS */}
-            {activeTab === "wallet" && (
-              <div>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 14,
-                    marginBottom: 24,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <div
-                    style={{
-                      flex: 1,
-                      minWidth: 180,
-                      background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
-                      borderRadius: 14,
-                      padding: 20,
-                      color: "#fff",
-                    }}
-                  >
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: 11,
-                        opacity: 0.8,
-                        letterSpacing: "0.06em",
-                      }}
-                    >
-                      WALLET BALANCE
-                    </p>
-                    <p
-                      style={{
-                        margin: "8px 0 0",
-                        fontSize: 30,
-                        fontWeight: 800,
-                      }}
-                    >
-                      ₹ {customer.walletBalance ?? 0}
-                    </p>
-                  </div>
-                  <div
-                    style={{
-                      flex: 1,
-                      minWidth: 180,
-                      background: "linear-gradient(135deg,#f59e0b,#d97706)",
-                      borderRadius: 14,
-                      padding: 20,
-                      color: "#fff",
-                    }}
-                  >
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: 11,
-                        opacity: 0.8,
-                        letterSpacing: "0.06em",
-                      }}
-                    >
-                      REWARD POINTS
-                    </p>
-                    <p
-                      style={{
-                        margin: "8px 0 0",
-                        fontSize: 30,
-                        fontWeight: 800,
-                      }}
-                    >
-                      {customer.rewardPoints ?? 0}{" "}
-                      <span
-                        style={{ fontSize: 16, fontWeight: 500, opacity: 0.8 }}
-                      >
-                        pts
-                      </span>
-                    </p>
-                  </div>
-                </div>
-                <h4
-                  style={{
-                    margin: "0 0 14px",
-                    color: "#0f172a",
-                    fontSize: 14,
-                    fontWeight: 700,
-                  }}
-                >
-                  Reward History
-                </h4>
-                {!customer.rewardHistory?.length ? (
-                  <div
-                    style={{
-                      textAlign: "center",
-                      padding: "30px 0",
-                      color: "#94a3b8",
-                    }}
-                  >
-                    No reward history yet
-                  </div>
-                ) : (
-                  <div
-                    style={{ display: "flex", flexDirection: "column", gap: 8 }}
-                  >
-                    {customer.rewardHistory.map((h, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          padding: "12px 16px",
-                          background: "#f8fafc",
-                          borderRadius: 10,
-                          border: "1px solid #f1f5f9",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 12,
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: 36,
-                              height: 36,
-                              borderRadius: "50%",
-                              background:
-                                h.type === "credit" ? "#d1fae5" : "#fee2e2",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              color:
-                                h.type === "credit" ? "#10b981" : "#ef4444",
-                              fontWeight: 800,
-                              fontSize: 18,
-                            }}
-                          >
-                            {h.type === "credit" ? "+" : "−"}
-                          </div>
-                          <div>
-                            <p
-                              style={{
-                                margin: 0,
-                                fontWeight: 600,
-                                fontSize: 13,
-                                color: "#0f172a",
-                              }}
-                            >
-                              {h.remark ||
-                                (h.type === "credit"
-                                  ? "Points Added"
-                                  : "Points Deducted")}
-                            </p>
-                            <p
-                              style={{
-                                margin: 0,
-                                fontSize: 11,
-                                color: "#94a3b8",
-                              }}
-                            >
-                              {formatDateTime(h.createdAt)}
-                            </p>
-                            {h.expiryDate && (
-                              <p
-                                style={{
-                                  margin: 0,
-                                  fontSize: 11,
-                                  color: "#f59e0b",
-                                }}
-                              >
-                                Expires: {formatDate(h.expiryDate)}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <p
-                          style={{
-                            margin: 0,
-                            fontWeight: 800,
-                            fontSize: 16,
-                            color: h.type === "credit" ? "#10b981" : "#ef4444",
-                          }}
-                        >
-                          {h.type === "credit" ? "+" : "−"}
-                          {Math.abs(h.points)} pts
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* REVIEWS */}
             {activeTab === "reviews" &&

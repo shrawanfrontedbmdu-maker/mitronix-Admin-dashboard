@@ -476,7 +476,7 @@ export default function CustomerList() {
   const menuRef = useRef(null);
   const [toggleLoading, setToggleLoading] = useState({});
   const MENU_WIDTH = 160,
-    MENU_HEIGHT = 170;
+    MENU_HEIGHT = 90;
 
   const fetchCustomers = useCallback(async (p = 1) => {
     setLoading(true);
@@ -869,8 +869,6 @@ export default function CustomerList() {
                     "Customer",
                     "Phone",
                     "Joined",
-                    "Wallet",
-                    "Points",
                     "Status",
                     "Action",
                   ].map((h) => (
@@ -895,7 +893,7 @@ export default function CustomerList() {
                 {loading ? (
                   [...Array(6)].map((_, i) => (
                     <tr key={i}>
-                      {[...Array(9)].map((_, j) => (
+                      {[...Array(7)].map((_, j) => (
                         <td key={j} style={{ padding: "12px 14px" }}>
                           <div
                             style={{
@@ -915,7 +913,7 @@ export default function CustomerList() {
                 ) : customers.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={7}
                       style={{
                         textAlign: "center",
                         padding: "50px 0",
@@ -1061,30 +1059,6 @@ export default function CustomerList() {
                       >
                         {formatDate(cust.createdAt)}
                       </td>
-                      <td
-                        style={{
-                          padding: "12px 14px",
-                          fontWeight: 600,
-                          color: "#0f172a",
-                          fontSize: 13,
-                        }}
-                      >
-                        ₹{cust.walletBalance ?? 0}
-                      </td>
-                      <td style={{ padding: "12px 14px" }}>
-                        <span
-                          style={{
-                            background: "#fef9c3",
-                            color: "#a16207",
-                            padding: "3px 9px",
-                            borderRadius: 20,
-                            fontSize: 11,
-                            fontWeight: 700,
-                          }}
-                        >
-                          {cust.rewardPoints ?? 0} pts
-                        </span>
-                      </td>
                       <td style={{ padding: "12px 14px" }}>
                         <Toggle
                           checked={cust.status === "active"}
@@ -1214,22 +1188,7 @@ export default function CustomerList() {
                 icon: <MdVisibility size={15} />,
                 label: "View Details",
                 action: () => {
-                  navigate(`/admin/customers/detail/${activeCustomer._id}`)
-                  setMenuPos(null);
-                },
-              },
-              {
-                icon: <MdAdd size={15} />,
-                label: "Reward Points",
-                action: () => {
-                  setPointsCustomer(activeCustomer);
-                  setMenuPos(null);
-                },
-              },
-              {
-                icon: <MdEdit size={15} />,
-                label: "Edit",
-                action: () => {
+                  navigate(`/admin/customers/detail/${activeCustomer._id}`);
                   setMenuPos(null);
                 },
               },

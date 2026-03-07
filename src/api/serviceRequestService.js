@@ -1,110 +1,120 @@
 import { instance } from './axios.config.js'
-import { mockServiceRequests, mockUsers } from "./mockData.js";
-
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const serviceRequestService = {
+
+
+  // params: { page, limit, status, type, priority }
   getAll: async (params = {}) => {
     try {
       const response = await instance.get('/service-requests', { params });
       return response.data;
-    } catch (apiError) {
-      console.log('Error while fetching service requests:', apiError);
-      throw apiError;
+    } catch (error) {
+      console.error('Error while fetching service requests:', error);
+      throw error;
     }
   },
+
+  // GET BY ID
   getById: async (id) => {
     try {
       const response = await instance.get(`/service-requests/${id}`);
       return response.data;
-    } catch (apiError) {
-      console.log('Error while fetching service request by ID:', apiError);
-      throw apiError;
+    } catch (error) {
+      console.error('Error while fetching service request by ID:', error);
+      throw error;
     }
   },
+
+  // GET LOGGED-IN USER'S REQUESTS
+  // params: { page, limit }
+  getMyRequests: async (params = {}) => {
+    try {
+      const response = await instance.get('/service-requests/user/my-requests', { params });
+      return response.data;
+    } catch (error) {
+      console.error('Error while fetching user service requests:', error);
+      throw error;
+    }
+  },
+
+  // FILTER BY status / type / priority (any combination)
+  // params: { status, type, priority, page, limit }
+  filter: async (params = {}) => {
+    try {
+      const response = await instance.get('/service-requests/filter', { params });
+      return response.data;
+    } catch (error) {
+      console.error('Error while filtering service requests:', error);
+      throw error;
+    }
+  },
+
+  // CREATE
+  // data: { productname, description, type, paymentdetails, phone, address, ... }
   create: async (data) => {
     try {
       const response = await instance.post('/service-requests', data);
       return response.data;
-    } catch (apiError) {
-      console.log('Error while creating service request:', apiError);
-      throw apiError;
+    } catch (error) {
+      console.error('Error while creating service request:', error);
+      throw error;
     }
   },
 
+  // data: any subset of service request fields
   update: async (id, data) => {
     try {
       const response = await instance.put(`/service-requests/${id}`, data);
       return response.data;
     } catch (error) {
-      console.error('Error updating service request:', error);
+      console.error('Error while updating service request:', error);
       throw error;
     }
   },
 
-  addComment: async (id, commentData) => {
+
+  // status: "open" | "in progress" | "completed" | "cancelled"
+  updateStatus: async (id, status) => {
     try {
-      await delay(400);
-      const requestIndex = mockServiceRequests.findIndex(req => req.id === id);
-      if (requestIndex === -1) {
-        throw new Error('Service request not found');
-      }
-
-      if (!mockServiceRequests[requestIndex].comments) {
-        mockServiceRequests[requestIndex].comments = [];
-      }
-
-      const newComment = {
-        id: Date.now().toString(),
-        ...commentData,
-        createdAt: new Date().toISOString()
-      };
-
-      mockServiceRequests[requestIndex].comments.push(newComment);
-      mockServiceRequests[requestIndex].updatedAt = new Date().toISOString();
-
-      return newComment;
+      const response = await instance.put(`/service-requests/${id}`, { status });
+      return response.data;
     } catch (error) {
-      console.error('Error adding comment:', error);
+      console.error('Error while updating service request status:', error);
       throw error;
     }
   },
 
+  
+  // assignedTo: User ObjectId string
   assign: async (id, assignedTo) => {
     try {
-      await delay(400);
-      const requestIndex = mockServiceRequests.findIndex(req => req.id === id);
-      if (requestIndex === -1) {
-        throw new Error('Service request not found');
-      }
-
-      mockServiceRequests[requestIndex].assignedTo = assignedTo;
-      mockServiceRequests[requestIndex].updatedAt = new Date().toISOString();
-
-      return mockServiceRequests[requestIndex];
+      const response = await instance.put(`/service-requests/${id}`, { assignedTo });
+      return response.data;
     } catch (error) {
-      console.error('Error assigning service request:', error);
+      console.error('Error while assigning service request:', error);
       throw error;
     }
   },
 
-  getStats: async () => {
+  // ADD ADMIN REMARK — convenience wrapper
+  addRemark: async (id, adminRemarks) => {
     try {
-      const response = await instance.get('/service-requests/stats');
+      const response = await instance.put(`/service-requests/${id}`, { adminRemarks });
       return response.data;
-    } catch (apiError) {
-      console.log('Error while fetching service request stats:', apiError);
-      throw apiError;
+    } catch (error) {
+      console.error('Error while adding remark to service request:', error);
+      throw error;
     }
   },
 
+  // DELETE
   delete: async (id) => {
     try {
       const response = await instance.delete(`/service-requests/${id}`);
       return response.data;
-    } catch (apiError) {
-      console.log('Error while deleting service request:', apiError);
-      throw apiError;
+    } catch (error) {
+      console.error('Error while deleting service request:', error);
+      throw error;
     }
   },
 };

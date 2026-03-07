@@ -17,7 +17,7 @@ export default defineConfig({
     proxy: {
       // Forward API requests to local backend during development
       '/api': {
-        target: 'https://miltronix-backend-1.onrender.com/api', // Your backend URL
+        target: 'https://miltronix-backend-2.onrender.com/api', // Your backend URL
         changeOrigin: true,
         secure: false,
         configure: (proxy, options) => {

@@ -28,6 +28,7 @@ function OrdersList() {
       try {
         setLoading(true)
         const ordersData = await orderService.getOrders()
+        console.log(ordersData)
         setOrders(ordersData || [])
       } catch (error) {
         console.error('Error fetching orders:', error)
@@ -45,6 +46,7 @@ function OrdersList() {
     try {
       setLoading(true)
       const ordersData = await orderService.getOrdersThisMonth()
+      console.log("This month orders data:", ordersData)
       setOrders(ordersData?.data || [])
     } catch (error) {
       console.error('Error fetching orders:', error)
@@ -58,6 +60,7 @@ function OrdersList() {
     try {
       setLoading(true)
       const ordersData = await orderService.getOrdersLastMonth()
+      console.log("Last month orders data:", ordersData)
       setOrders(ordersData?.data || [])
     } catch (error) {
       console.error('Error fetching orders:', error)
@@ -71,6 +74,7 @@ function OrdersList() {
     try {
       setLoading(true)
       const ordersData = await orderService.getOrdersThisYear()
+      console.log("This year orders data:", ordersData)
       setOrders(ordersData?.data || [])
     } catch (error) {
       console.error('Error fetching orders:', error)
@@ -190,17 +194,6 @@ function OrdersList() {
         <div className="page-title-section">
           <h1 className="page-title">ORDERS LIST</h1>
         </div>
-        <div className="page-actions">
-          <select className="time-filter" onChange={handlemonthvalue}>
-            <option value="this-month">This Month</option>
-            <option value="last-month">Last Month</option>
-            <option value="this-year">This Year</option>
-          </select>
-          <Link to="/orders/add" className="btn btn-primary">
-            <MdAdd size={16} />
-            Create Order
-          </Link>
-        </div>
       </div>
 
       {/* Order Statistics Grid */}
@@ -270,12 +263,12 @@ function OrdersList() {
                   <th>Order ID</th>
                   <th>Created at</th>
                   <th>Customer</th>
-                  <th>Mode</th>
+                  <th>Payment Mode</th>
                   <th>Priority</th>
                   <th>Total</th>
                   <th>Payment Status</th>
                   <th>Items</th>
-                  <th>Delivery Number</th>
+                  <th>Order Number</th>
                   <th>Order Status</th>
                   <th>Action</th>
                 </tr>
@@ -292,8 +285,8 @@ function OrdersList() {
                       </Link>
                     </td>
                     <td>{new Date(order.orderDate || order.createdAt).toLocaleDateString()}</td>
-                    <td>{order.customerName || order.customer || 'N/A'}</td>
-                    <td>{order.mode || 'Online'}</td>
+                    <td>{order.customerName || order.customer.name || 'N/A'}</td>
+                    <td>{order.payment.method || 'Online'}</td>
                     <td>
                       <span
                         className={`priority-badge ${getPriorityClass(
@@ -307,34 +300,34 @@ function OrdersList() {
                     <td>
                       <span
                         className={`status-badge ${getStatusBadgeClass(
-                          order.paymentStatus || 'Pending'
+                          order.payment.status
                         )}`}
                       >
-                        {order.paymentStatus || 'Pending'}
+                        {order.payment.status}
                       </span>
                     </td>
-                    <td>{order.products?.length || order.items || 0}</td>
-                    <td>{order.deliveryNumber || order.trackingnumber || '-'}</td>
+                    <td>{order?.length || order.items?.length || 0}</td>
+                    <td>{order.orderNumber || '-'}</td>
                     <td>
                       <span
                         className={`status-badge ${getStatusBadgeClass(
-                          order.orderStatus || 'Processing'
+                          order.fulfillment.orderStatus
                         )}`}
                       >
-                        {order.orderStatus || 'Processing'}
+                        {order.fulfillment.orderStatus}
                       </span>
                     </td>
                     <td>
                       <div className="action-buttons">
                         <Link
-                          to={`/orders/details/${order._id}`}
+                          to={`/admin/orders/details/${order._id}`}
                           className="action-btn view"
                           title="View Order"
                         >
                           <MdVisibility size={16} />
                         </Link>
                         <Link
-                          to={`/orders/edit/${order._id}`}
+                          to={`/admin/orders/edit/${order._id}`}
                           className="action-btn edit"
                           title="Edit Order"
                         >

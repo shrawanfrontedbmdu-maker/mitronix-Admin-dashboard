@@ -38,7 +38,7 @@ function EditBrand() {
       setSaving(true)
       await brandService.updateBrand(id, { name: name.trim() })
       alert('Brand updated')
-      navigate('/brands/list')
+      navigate('/admin/brands/list')
     } catch (err) {
       setError('Failed to update brand')
     } finally {

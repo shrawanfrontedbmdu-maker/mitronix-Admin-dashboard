@@ -35,6 +35,10 @@ function BannerList() {
     const [retryCount, setRetryCount] = useState(0);
     const [serverStatsUnavailable, setServerStatsUnavailable] = useState(true);
 
+  const printbanner = () => {
+        console.log(banners)
+    }
+
     useEffect(() => {
         fetchBanners();
         if (!serverStatsUnavailable) {
@@ -53,6 +57,7 @@ function BannerList() {
             if (Array.isArray(response)) {
                 bannersData = response;
                 setBanners(response);
+                console.log(response)
                 setPagination({ current: 1, total: 1, pages: 1 });
             } else {
                 bannersData = response.data || response.banners || [];
@@ -249,7 +254,7 @@ function BannerList() {
                     <p className="page-subtitle">Manage promotional banners and advertisements</p>
                 </div>
                 <div className="page-actions">
-                    <Link to="/banners/create" className="btn btn-primary">
+                    <Link to="/admin/banners/create" className="btn btn-primary">
                         <MdAdd size={20} />
                         Create Banner
                     </Link>
@@ -257,7 +262,7 @@ function BannerList() {
             </div>
 
             {/* Stats Cards */}
-            <div className="stats-grid">
+            {/* <div className="stats-grid">
                 <div className="stats-card">
                     <div className="stats-icon total">
                         <MdImage size={24} />
@@ -294,48 +299,10 @@ function BannerList() {
                         <p>Total Clicks</p>
                     </div>
                 </div>
-            </div>
+            </div> */}
 
             {/* Filters */}
             <div className="content-card">
-                <div className="filters-section">
-                    <div className="search-box">
-                        <MdSearch size={20} />
-                        <input
-                            type="text"
-                            placeholder="Search banners..."
-                            value={filters.search}
-                            onChange={(e) => handleFilterChange('search', e.target.value)}
-                        />
-                    </div>
-
-                    <div className="filter-group">
-                        <select
-                            value={filters.status}
-                            onChange={(e) => handleFilterChange('status', e.target.value)}
-                        >
-                            <option value="">All Status</option>
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                            <option value="scheduled">Scheduled</option>
-                            <option value="expired">Expired</option>
-                        </select>
-
-                        <select
-                            value={filters.placement}
-                            onChange={(e) => handleFilterChange('placement', e.target.value)}
-                        >
-                            <option value="">All Placements</option>
-                            <option value="homepage-hero">Homepage Hero</option>
-                            <option value="homepage-sidebar">Homepage Sidebar</option>
-                            <option value="product-page-sidebar">Product Page Sidebar</option>
-                            <option value="category-page-header">Category Page Header</option>
-                            <option value="checkout-page">Checkout Page</option>
-                            <option value="cart-page">Cart Page</option>
-                            <option value="search-results">Search Results</option>
-                        </select>
-                    </div>
-                </div>
 
                 {error && (
                     <div className="error-message">
@@ -364,44 +331,106 @@ function BannerList() {
                             <table>
                                 <thead>
                                     <tr>
-                                        <th>Banner</th>
-                                        <th>Placement</th>
-                                        <th>Target Audience</th>
+                                        <th>SR No.</th>
+                                        <th>Image</th>
+                                        <th>Banner Group</th>
+                                        <th>Titles</th>
                                         <th>Status</th>
-                                        <th>Schedule</th>
-                                        <th>Performance</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {(banners || []).map((banner) => (
+                                    <tr className='group-row bottom-group'>
+                                        <td colSpan="3">    Bottom Banner (
+                                            {banners
+                                                ? banners.filter(
+                                                    (banner) => banner.bannertype === "bottom banner"
+                                                ).length
+                                                : 0}
+                                            )
+                                        </td>
+                                    </tr>
+                                    {(banners || []).filter(b => b.bannertype == "bottom banner").map((banner, index) => (
                                         <tr key={banner._id}>
+                                            <td>{index+1}</td>
                                             <td>
                                                 <div className="banner-info">
                                                     <img
-                                                        src={banner.imageUrl || 'https://via.placeholder.com/60x30'}
+                                                        src={banner.bennerimg}
                                                         alt={banner.title}
                                                         className="banner-thumbnail"
-                                                        onError={(e) => {
-                                                            e.target.src = 'https://via.placeholder.com/60x30?text=Banner';
-                                                        }}
-                                                    />
-                                                    <div className="banner-details">
-                                                        <strong className="banner-title">{typeof banner.title === 'object' ? banner.title?.name || banner.title?.value || 'N/A' : (banner.title || 'N/A')}</strong>
-                                                        <p className="banner-description">{typeof banner.description === 'object' ? banner.description?.text || banner.description?.content || 'N/A' : (banner.description || 'N/A')}</p>
-                                                    </div>
+
+                                                    /> 
                                                 </div>
                                             </td>
                                             <td>
                                                 <div className="placement-info">
-                                                    <MdLocationOn size={16} className="placement-icon" />
-                                                    <span>{getPlacementLabel(typeof banner.placement === 'object' ? banner.placement?.name || banner.placement?.value : banner.placement)}</span>
+                                                    {banner.title}
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div>{banner.title}</div>
+                                            </td>
+                                            <td>
+                                                <span className={`status-badge ${getStatusColor(typeof banner.status === 'object' ? banner.status?.name || banner.status?.value : banner.status)}`}>
+                                                    {typeof banner.status === 'object' ? banner.status?.name || banner.status?.value || 'N/A' : (banner.status || 'N/A')}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div className="action-buttons">
+                                                    <Link
+                                                        to={`/admin/banners/${banner._id}/edit`}
+                                                        className="action-btn edit"
+                                                        title="Edit Banner"
+                                                    >
+                                                        <MdEdit size={16} />
+                                                    </Link>
+
+                                                    <button
+                                                        onClick={() => handleDelete(banner._id)}
+                                                        className="action-btn delete"
+                                                        title="Delete Banner"
+                                                    >
+                                                        <MdDelete size={16} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                <tbody>
+                                    <tr className='group-row bottom-group'>
+                                        <td colSpan={3}>
+                                            hero Banner (
+                                            {banners
+                                                ? banners.filter(
+                                                    (banner) => banner.bannertype === "hero banner"
+                                                ).length
+                                                : 0}
+                                            )
+                                        </td>
+                                    </tr>
+                                    {(banners || []).filter(b => b.bannertype == "hero banner").map((banner, index) => (
+                                        <tr key={banner._id}>
+                                            <td>{index+1}</td>
+                                            <td>
+                                                <div className="banner-info">
+                                                    <img
+                                                        src={banner.bennerimg}
+                                                        alt={banner.title}
+                                                        className="banner-thumbnail"
+
+                                                    /> 
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div className="placement-info">
+                                                    {banner.title}
                                                 </div>
                                             </td>
                                             <td>
                                                 <div className="audience-info">
-                                                    <MdPeople size={16} className="audience-icon" />
-                                                    <span>{typeof banner.targetAudience === 'object' ? banner.targetAudience?.name || banner.targetAudience?.value || 'All Users' : (banner.targetAudience || 'All Users')}</span>
+                                                    {banner.title}
                                                 </div>
                                             </td>
                                             <td>
@@ -410,55 +439,77 @@ function BannerList() {
                                                 </span>
                                             </td>
                                             <td>
-                                                <div className="schedule-info">
-                                                    <div className="date-range">
-                                                        <MdSchedule size={14} />
-                                                        <span>{formatDate(banner.startDate)} - {formatDate(banner.endDate)}</span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div className="performance-metrics">
-                                                    <div className="metric">
-                                                        <span className="metric-value">{formatNumber(banner.impressions||0)}</span>
-                                                        <span className="metric-label">views</span>
-                                                    </div>
-                                                    <div className="metric">
-                                                        <span className="metric-value">{formatNumber(banner.clicks||0)}</span>
-                                                        <span className="metric-label">clicks</span>
-                                                    </div>
-                                                    <div className="metric">
-                                                        <span className="metric-value">{banner.clickRate||0}%</span>
-                                                        <span className="metric-label">CTR</span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>
                                                 <div className="action-buttons">
-                                                    <button
-                                                        onClick={() => handleToggleStatus(banner._id, banner.status)}
-                                                        className="action-btn view"
-                                                        title={banner.status === 'Active' ? 'Deactivate' : 'Activate'}
-                                                    >
-                                                        {banner.status === 'Active'
-                                                            ? <MdVisibilityOff size={16} />
-                                                            : <MdVisibility size={16} />
-                                                        }
-                                                    </button>
                                                     <Link
-                                                        to={`/banners/${banner._id}/edit`}
+                                                        to={`/admin/banners/${banner._id}/edit`}
                                                         className="action-btn edit"
                                                         title="Edit Banner"
                                                     >
                                                         <MdEdit size={16} />
                                                     </Link>
-                                                    {/* <button
-                                                        onClick={() => handleDuplicate(banner._id)}
-                                                        className="action-btn view"
-                                                        title="Duplicate Banner"
+
+                                                    <button
+                                                        onClick={() => handleDelete(banner._id)}
+                                                        className="action-btn delete"
+                                                        title="Delete Banner"
                                                     >
-                                                        <MdContentCopy size={16} />
-                                                    </button> */}
+                                                        <MdDelete size={16} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                <tbody>
+                                    <tr className='group-row bottom-group'>
+                                        <td colSpan={3}>
+                                            offer Banner (
+                                            {banners
+                                                ? banners.filter(
+                                                    (banner) => banner.bannertype === "offer banner"
+                                                ).length
+                                                : 0}
+                                            )
+                                        </td>
+                                    </tr>
+                                    {(banners || []).filter(b => b.bannertype == "offer banner").map((banner, index) => (
+                                        <tr key={banner._id}>
+                                            <td>{index+1}</td>
+                                            <td>
+                                                <div className="banner-info">
+                                                    <img
+                                                        src={banner.bennerimg}
+                                                        alt={banner.title}
+                                                        className="banner-thumbnail"
+
+                                                    /> 
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div className="placement-info">
+                                                    {banner.title}
+                                               </div>
+                                            </td>
+                                            <td>
+                                                <div className="audience-info">
+                                                    {banner.title}
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span className={`status-badge ${getStatusColor(typeof banner.status === 'object' ? banner.status?.name || banner.status?.value : banner.status)}`}>
+                                                    {typeof banner.status === 'object' ? banner.status?.name || banner.status?.value || 'N/A' : (banner.status || 'N/A')}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div className="action-buttons">
+                                                    <Link
+                                                        to={`/admin/banners/${banner._id}/edit`}
+                                                        className="action-btn edit"
+                                                        title="Edit Banner"
+                                                    >
+                                                        <MdEdit size={16} />
+                                                    </Link>
+
                                                     <button
                                                         onClick={() => handleDelete(banner._id)}
                                                         className="action-btn delete"
@@ -472,6 +523,7 @@ function BannerList() {
                                     ))}
                                 </tbody>
                             </table>
+                          
                         </div>
 
                         {/* Pagination */}
@@ -503,6 +555,22 @@ function BannerList() {
             </div>
 
             <style>{`
+   .group-row td {
+  padding: 14px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  border-radius: 6px;
+}
+
+/* Bottom Banner - Gray Theme */
+.bottom-group td {
+  border-left: 5px solid #9ca3af; /* soft gray accent */
+}
+
+
+
                 .stats-grid {
                     display: grid;
                     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -710,6 +778,7 @@ function BannerList() {
                         gap: 2px;
                     }
                 }
+
             `}</style>
         </div>
     );

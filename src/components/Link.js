@@ -46,13 +46,13 @@ const sidebarLinks = [
     match: "/categories",
     roles: ["admin"],
   },
-  {
-    label: "Brands",
-    path: "/brands/list",
-    icon: MdGroup,
-    match: "/brands",
-    roles: ["admin"],
-  },
+  // {
+  //   label: "Brands",
+  //   path: "/brands/list",
+  //   icon: MdGroup,
+  //   match: "/brands",
+  //   roles: ["admin"],
+  // },
   {
     label: "Inventory",
     path: "/inventory",
@@ -88,10 +88,7 @@ const sidebarLinks = [
     icon: MdViewCarousel,
     match: "/banners",
     roles: ["admin"],
-    children: [
-      { label: "All Banners", path: "/banners" },
-      { label: "Delay Banners", path: "/delay-banners" },
-    ],
+    path:"/banners"
   },
   {
     label: "Coupons",
@@ -130,10 +127,7 @@ const sidebarLinks = [
     icon: MdNotificationAdd,
     match: "/notifications",
     roles: ["admin"],
-    children: [
-      { label: "Notifications", path: "/notifications" },
-      { label: "Notification Logger", path: "/notification-logger" },
-    ],
+    path:"/notifications"
   },
   {
     label: "Payments",
@@ -155,13 +149,13 @@ const sidebarLinks = [
     match: "/blogs",
     roles: ["admin"],
   },
-  {
-    label: "Roles",
-    path: "/roles",
-    icon: MdAdminPanelSettings,
-    match: "/roles",
-    roles: ["admin"],
-  },
+  // {
+  //   label: "Roles",
+  //   path: "/roles",
+  //   icon: MdAdminPanelSettings,
+  //   match: "/roles",
+  //   roles: ["admin"],
+  // },
   {
     label: "Settings",
     path: "/settings",

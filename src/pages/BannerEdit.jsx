@@ -1,170 +1,3 @@
-// import { useState, useEffect } from 'react';
-// import { useNavigate, useParams, Link } from 'react-router-dom';
-// import { MdArrowBack, MdCancel, MdDrafts, MdPublish, MdClose, MdAdd } from 'react-icons/md';
-// import bannerService from '../api/bannerService';
-
-// function BannerEdit() {
-//     const navigate = useNavigate();
-//     const { id } = useParams();
-//     const [loading, setLoading] = useState(false);
-//     const [fetchLoading, setFetchLoading] = useState(true);
-//     const [error, setError] = useState('');
-
-//     const [formData, setFormData] = useState({
-//         title: '',
-//         description: '',
-//         imageUrl: '',
-//         imageAlt: '',
-//         link: '',
-//         linkTarget: '_self',
-//         placement: 'homepage-hero',
-//         targetAudience: 'All Users',
-//         status: 'inactive',
-//         startDate: '',
-//         endDate: '',
-//         priority: 1,
-//         isClickable: true,
-//         trackingEnabled: true,
-//         notes: ''
-//     });
-
-//     useEffect(() => {
-//         if (id) {
-//             loadBanner();
-//         }
-//     }, [id]);
-
-//     const loadBanner = async () => {
-//         try {
-//             setFetchLoading(true);
-//             const data = await bannerService.getById(id);
-//             setFormData({
-//                 title: data.title || '',
-//                 description: data.description || '',
-//                 imageUrl: data.imageUrl || '',
-//                 imageAlt: data.imageAlt || '',
-//                 link: data.link || '',
-//                 linkTarget: data.linkTarget || '_self',
-//                 placement: data.placement || 'homepage-hero',
-//                 targetAudience: data.targetAudience || 'All Users',
-//                 status: data.status || 'inactive',
-//                 startDate: data.startDate ? data.startDate.split('T')[0] : '',
-//                 endDate: data.endDate ? data.endDate.split('T')[0] : '',
-//                 priority: data.priority || 1,
-//                 isClickable: data.isClickable ?? true,
-//                 trackingEnabled: data.trackingEnabled ?? true,
-//                 notes: data.notes || ''
-//             });
-//         } catch (error) {
-//             setError(error.message || 'Failed to load banner');
-//         } finally {
-//             setFetchLoading(false);
-//         }
-//     };
-
-//     const handleInputChange = (e) => {
-//         const { name, value, type, checked } = e.target;
-//         setFormData(prev => ({
-//             ...prev,
-//             [name]: type === 'checkbox' ? checked : value
-//         }));
-//     };
-
-//     const handleSubmit = async (e, statusOverride = null) => {
-//         e.preventDefault();
-//         if (!formData.title.trim() || !formData.imageUrl.trim() || !formData.startDate || !formData.endDate) {
-//             setError('Please fill all required fields');
-//             return;
-//         }
-
-//         if (new Date(formData.startDate) >= new Date(formData.endDate)) {
-//             setError('End date must be after start date');
-//             return;
-//         }
-
-//         try {
-//             setLoading(true);
-//             await bannerService.update(id, {
-//                 ...formData,
-//                 status: statusOverride || formData.status,
-//                 startDate: new Date(formData.startDate).toISOString(),
-//                 endDate: new Date(formData.endDate).toISOString(),
-//             });
-//             navigate('/banners');
-//         } catch (error) {
-//             setError(error.message || 'Failed to update banner');
-//         } finally {
-//             setLoading(false);
-//         }
-//     };
-
-//     const handleCancel = () => navigate('/banners');
-
-//     if (fetchLoading) return <div>Loading banner details...</div>;
-
-//     return (
-//         <div className="banner-edit">
-//             <div className="page-header">
-//                 <h1>Edit Banner</h1>
-//                 <p>{formData.title}</p>
-//                 <Link to="/banners" className="btn btn-secondary">
-//                     <MdArrowBack /> Back to Banners
-//                 </Link>
-//             </div>
-
-//             <div className="content-card">
-//                 {error && <div className="error-message">{error}</div>}
-//                 <form onSubmit={(e) => handleSubmit(e)}>
-//                     <div className="form-group">
-//                         <label>Title *</label>
-//                         <input name="title" value={formData.title} onChange={handleInputChange} required />
-//                     </div>
-
-//                     <div className="form-group">
-//                         <label>Description</label>
-//                         <textarea name="description" value={formData.description} onChange={handleInputChange} />
-//                     </div>
-
-//                     <div className="form-group">
-//                         <label>Image URL *</label>
-//                         <input name="imageUrl" value={formData.imageUrl} onChange={handleInputChange} required />
-//                         {formData.imageUrl && <img src={formData.imageUrl} alt={formData.imageAlt} style={{ maxHeight: '150px', marginTop: '10px' }} />}
-//                     </div>
-
-//                     <div className="form-group">
-//                         <label>Alt Text</label>
-//                         <input name="imageAlt" value={formData.imageAlt} onChange={handleInputChange} />
-//                     </div>
-
-//                     <div className="form-group">
-//                         <label>Start Date *</label>
-//                         <input type="date" name="startDate" value={formData.startDate} onChange={handleInputChange} required />
-//                     </div>
-
-//                     <div className="form-group">
-//                         <label>End Date *</label>
-//                         <input type="date" name="endDate" value={formData.endDate} onChange={handleInputChange} required />
-//                     </div>
-
-//                     <div className="form-actions">
-//                         <button type="submit" className="btn btn-secondary" disabled={loading}>
-//                             <MdDrafts /> {loading ? 'Saving...' : 'Save'}
-//                         </button>
-//                         <button type="button" onClick={(e) => handleSubmit(e, 'active')} className="btn btn-primary" disabled={loading}>
-//                             <MdPublish /> {loading ? 'Publishing...' : 'Update & Publish'}
-//                         </button>
-//                         <button type="button" onClick={handleCancel} className="btn btn-ghost" disabled={loading}>
-//                             <MdCancel /> Cancel
-//                         </button>
-//                     </div>
-//                 </form>
-//             </div>
-//         </div>
-//     );
-// }
-
-// export default BannerEdit;
-
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -191,21 +24,13 @@ function BannerEdit() {
     const [fetchLoading, setFetchLoading] = useState(true);
 
     const [formData, setFormData] = useState({
+        bannertype: "",
+        theme: "",
         title: "",
-        imageUrl: "",
-        imageAlt: "",
-        link: "",
-        linkTarget: "_self",
-        placement: "homepage-hero",
-        targetAudience: "All Users",
-        status: "InActive",
-        startDate: "",
-        endDate: "",
-        priority: "Medium",
-        isClickable: true,
-        trackingEnabled: true,
-        notes: "",
+        description: "",
+        status: "active"
     });
+
 
     const [selectedImage, setSelectedImage] = useState(null);
     const [imagePreview, setImagePreview] = useState("");
@@ -213,12 +38,14 @@ function BannerEdit() {
     const [showPreview, setShowPreview] = useState(false);
 
     const handleInputChange = (e) => {
-        const { name, value, type, checked } = e.target;
+        const { name, value } = e.target;
+
         setFormData((prev) => ({
             ...prev,
-            [name]: type === "checkbox" ? checked : value,
+            [name]: value,
         }));
     };
+
 
     useEffect(() => {
         if (id) {
@@ -233,21 +60,12 @@ function BannerEdit() {
             const data = response.banner || response.data || response;
 
             setFormData({
+                bannertype: data.bannertype || '',
+                theme: data.theme || '',
                 title: data.title || '',
-                imageUrl: data.imageUrl || '',
-                imageAlt: data.imageAltText || '',
-                link: data.link || '',
-                linkTarget: data.linkTarget || '_self',
-                placement: data.placement || 'homepage-hero',
-                targetAudience: data.targetAudience || 'All Users',
-                status: data.status || 'InActive',
-                startDate: data.startDate ? new Date(data.startDate).toISOString().slice(0, 16) : '',
-                endDate: data.endDate ? new Date(data.endDate).toISOString().slice(0, 16) : '',
-                priority: data.priority || 'Medium',
-                isClickable: data.isClickable ?? true,
-                trackingEnabled: data.trackingEnabled ?? true,
-                notes: data.notes || ''
+                description: data.description || '',   // ✅ YE ADD KARO
             });
+
 
             // existing image preview
             if (data.imageUrl) {
@@ -272,10 +90,7 @@ function BannerEdit() {
                 "image/gif",
                 "image/webp",
             ];
-            if (!validImageTypes.includes(file.type)) {
-                setError("Please select a valid image file (JPG, PNG, GIF, WebP)");
-                return;
-            }
+            
 
             if (file.size > 5 * 1024 * 1024) {
                 setError("Image size must be less than 5MB");
@@ -346,6 +161,28 @@ function BannerEdit() {
         setShowPreview(true);
     };
 
+    const handleImageChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const validTypes = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
+
+        if (!validTypes.includes(file.type)) {
+            setError("Only JPG, PNG, WEBP allowed");
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            setError("Image must be less than 5MB");
+            return;
+        }
+
+        setSelectedImage(file);
+        setImagePreview(URL.createObjectURL(file));
+        setError("");
+    };
+
+
     const getPlacementLabel = (placement) => {
         const placements = {
             "homepage-hero": "Homepage Hero",
@@ -361,57 +198,22 @@ function BannerEdit() {
         return placements[placement] || placement;
     };
 
-    // const handleSubmit = async (e, status = "InActive") => {
-    //   e.preventDefault();
-
-    //   if (!formData.title.trim()) {
-    //     setError("Title is required");
-    //     return;
-    //   }
-
-    //   if (!selectedImage && !formData.imageUrl.trim()) {
-    //     setError("Please upload an image or provide an image URL");
-    //     return;
-    //   }
-
-    //   if (!formData.startDate || !formData.endDate) {
-    //     setError("Start date and end date are required");
-    //     return;
-    //   }
-
-    //   if (new Date(formData.startDate) >= new Date(formData.endDate)) {
-    //     setError("End date must be after start date");
-    //     return;
-    //   }
-
-    //   try {
-    //     setLoading(true);
-    //     setError("");
-
-    //     const submitData = {
-    //       ...formData,
-    //       status,
-    //       startDate: new Date(formData.startDate).toISOString(),
-    //       endDate: new Date(formData.endDate).toISOString(),
-    //       createdBy: "Admin User",
-    //     };
-
-    //     if (selectedImage) {
-    //       submitData.image = selectedImage;
-    //     }
-
-    //     await bannerService.create(submitData);
-
-    //     navigate("/banners");
-    //   } catch (error) {
-    //     setError(error.message || "Failed to create banner");
-    //   } finally {
-    //     setLoading(false);
-    //   }
-    // };
-
-    const handleSubmit = async (e, status = "InActive") => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
+
+        if (!formData.bannertype) {
+            return setError("Banner type is required");
+        }
+
+        if (!formData.theme) {
+            return setError("Theme is required");
+        }
+
+        if (!formData.title.trim()) {
+            return setError("Title is required");
+        }
+
+        
 
         try {
             setLoading(true);
@@ -419,27 +221,26 @@ function BannerEdit() {
 
             const data = new FormData();
 
-            Object.keys(formData).forEach((key) => {
-                data.append(key, formData[key]);
-            });
-
-            data.set("status", status);
-            data.set("startDate", new Date(formData.startDate).toISOString());
-            data.set("endDate", new Date(formData.endDate).toISOString());
+            data.append("bannertype", formData.bannertype);
+            data.append("theme", formData.theme);
+            data.append("title", formData.title);
+            data.append("description", formData.description);
 
             if (selectedImage) {
-                data.append("image", selectedImage); // must match multer field
+                data.append("image", selectedImage);
             }
 
             await bannerService.update(id, data);
 
-            navigate("/banners");
-        } catch (error) {
-            setError(error.message || "Failed to update banner");
+            navigate("/admin/banners");
+
+        } catch (err) {
+            setError(err.response?.data?.message || "Update failed");
         } finally {
             setLoading(false);
         }
     };
+
 
 
     const placementOptions = [
@@ -468,400 +269,162 @@ function BannerEdit() {
         <div>
             <div className="page-header">
                 <h1>Edit Banner</h1>
-                <p>{formData.title}</p>
-                <Link to="/banners" className="btn btn-secondary">
+
+                <p className="editing-badge">
+                    Editing: <span>{formData.title}</span>
+                </p>
+
+                <Link to="/admin/banners" className="btn btn-secondary">
                     <MdArrowBack /> Back to Banners
                 </Link>
             </div>
 
+
             <div className="content-card">
                 {error && <div className="error-message">{error}</div>}
 
-                <form
-                    onSubmit={(e) => handleSubmit(e, "InActive")}
-                    className="banner-form"
-                >
-                    {/* Basic Information */}
-                    <div className="form-section">
-                        <div className="section-header">
-                            <MdImage className="section-icon" />
-                            <h3>Basic Information</h3>
-                        </div>
+                <div style={{ maxWidth: '800px', width: '100%' }}>
+                    <form
+                        onSubmit={(e) => handleSubmit(e, "InActive")}
+                        className="banner-form"
+                    >
+                        <h2 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1.5rem', color: '#111' }}>
+                            Add New Banner
+                        </h2>
 
-                        <div className="form-row">
-                            <div className="form-group">
-                                <label htmlFor="title">Banner Title *</label>
+                        <div style={{
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '12px',
+                            padding: '2rem',
+                            backgroundColor: '#fff',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)' // Optional: Clean look ke liye
+                        }}>
+
+                            {/* Banner Type */}
+                            <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                                <label htmlFor="bannertype" style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+                                    Banner Type
+                                </label>
+                                <select
+                                    id="bannertype"
+                                    name="bannertype"
+                                    value={formData.bannertype}
+                                    onChange={handleInputChange}
+                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db' }}
+                                >
+                                    <option value="">Select Banner Type</option>
+                                    <option value="hero banner">Hero Banner</option>
+                                    <option value="offer banner">Offer Banner</option>
+                                    <option value="trending banner">Trending Banner</option>
+                                    <option value="bottom banner">Bottom Banner</option>
+                                    {/* Options yahan aayenge */}
+                                </select>
+                            </div>
+
+                            {/* Theme */}
+                            <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                                <label htmlFor="theme" style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+                                    Theme
+                                </label>
+                                <select
+                                    id="theme"
+                                    name="theme"
+                                    value={formData.theme}
+                                    onChange={handleInputChange}
+                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db' }}
+                                >
+                                    <option value="">Select Banner Theme</option>
+                                    <option value="diwali">Diwali</option>
+                                    <option value="holi">Holi</option>
+                                    <option value="eid">Eid</option>
+                                    <option value="cristmas">Cristmas</option>
+                                    <option value="navratri">Navratri</option>
+                                </select>
+                            </div>
+
+                            {/* Title */}
+                            <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                                <label htmlFor="title" style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+                                    Title
+                                </label>
                                 <input
                                     type="text"
                                     id="title"
                                     name="title"
                                     value={formData.title}
                                     onChange={handleInputChange}
-                                    placeholder="Enter banner title"
+                                    placeholder="e.g., Summer Sale"
                                     required
+                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db' }}
                                 />
                             </div>
 
-                            <div className="form-group">
-                                <label htmlFor="priority">Priority</label>
-                                <select
-                                    id="priority"
-                                    name="priority"
-                                    value={formData.priority}
+                            {/* Description */}
+                            <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                                <label htmlFor="description" style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+                                    Description
+                                </label>
+                                <textarea
+                                    id="description"
+                                    name="description"
+                                    value={formData.description}
                                     onChange={handleInputChange}
-                                >
-                                    <option value="High">High </option>
-                                    <option value="Medium">Medium</option>
-                                    <option value="Low">Low </option>
-                                </select>
+                                    placeholder="e.g., Up to 50% off"
+                                    rows={3}
+                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', resize: 'vertical' }}
+                                />
                             </div>
-                        </div>
 
-                        {/* <div className="form-group">
-                            <label htmlFor="description">Description</label>
-                            <textarea
-                                id="description"
-                                name="description"
-                                value={formData.description}
-                                onChange={handleInputChange}
-                                placeholder="Enter banner description"
-                                rows={3}
-                            />
-                        </div> */}
-                    </div>
-
-                    {/* Image Configuration */}
-                    <div className="form-section">
-                        <div className="section-header">
-                            <MdImage className="section-icon" />
-                            <h3>Image Configuration</h3>
-                        </div>
-
-                        <div className="form-group">
-                            <label htmlFor="imageUpload">Upload Banner Image *</label>
-                            <div
-                                className={`image-upload-area ${dragOver ? "dragover" : ""}`}
-                                onClick={() => document.getElementById("imageUpload").click()}
-                                onDrop={handleDrop}
-                                onDragOver={handleDragOver}
-                                onDragLeave={handleDragLeave}
-                            >
-                                <div className="upload-icon">
-                                    <MdUpload size={32} />
-                                </div>
-                                <div className="upload-text">
-                                    Drop your image here, or click to browse
-                                </div>
-                                <div className="upload-hint">
-                                    PNG, JPG, GIF and WebP files are allowed (Max 5MB)
-                                </div>
+                            {/* Banner URL */}
+                            <div className="form-group" style={{ marginBottom: '2rem' }}>
+                                <label htmlFor="link" style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+                                    Banner image
+                                </label>
                                 <input
                                     type="file"
-                                    id="imageUpload"
-                                    accept="image/*"
-                                    onChange={handleImageUpload}
-                                    style={{ display: "none" }}
+                                    id=""
+                                    name="image"
+                                    onChange={handleImageChange}
+                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db' }}
                                 />
-                                {/* ✅ Preview the uploaded image */}
-                                {imagePreview && (
-                                    <div style={{ marginTop: "10px" }}>
-                                        <img
-                                            src={imagePreview}
-                                            alt="Uploaded Preview"
-                                            style={{ maxHeight: "200px", borderRadius: "8px" }}
-                                        />
-                                    </div>
-                                )}
+                            </div>
 
-                                {/* Optional fallback if editing existing image and no new one is uploaded */}
-                                {!imagePreview && formData.imageUrl && (
-                                    <div
-                                        style={{
-                                            marginTop: "10px",
-                                            position: "relative",
-                                            display: "inline-block",
-                                        }}
-                                    >
-                                        <img
-                                            src={formData.imageUrl}
-                                            alt={formData.imageAlt}
-                                            style={{ maxHeight: "200px", borderRadius: "8px" }}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={handleRemoveImage}
-                                            title="Remove image"
-                                            className="remove-image-btn"
-                                        >
-                                            <MdDelete size={18} />
-                                        </button>
-                                    </div>
-                                )}
+                            {/* Form Actions */}
+                            <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-start', gap: '12px' }}>
+                                <button
+                                    type="submit"
+                                    className="btn btn-primary"
+                                    style={{
+                                        padding: '10px 24px',
+                                        borderRadius: '6px',
+                                        color: '#fff',
+                                        border: 'none',
+                                        cursor: 'pointer'
+                                    }}
+                                    disabled={loading}
+                                >
+                                    {loading ? "Updating..." : "Update Banner"}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    style={{
+                                        padding: '10px 24px',
+                                        borderRadius: '6px',
+                                        backgroundColor: '#9ca3af',
+                                        color: '#fff',
+                                        border: 'none',
+                                        cursor: 'pointer'
+                                    }}
+                                    onClick={() => { navigate("/admin/banners") }}
+                                >
+                                    Cancel
+                                </button>
                             </div>
                         </div>
-
-                        {/* <div className="form-group">
-                    <label htmlFor="imageUrl">Or Image URL</label>
-                    <input
-                        type="url"
-                        id="imageUrl"
-                        name="imageUrl"
-                        value={formData.imageUrl}
-                        onChange={handleInputChange}
-                        placeholder="https://example.com/image.jpg"
-                        disabled={!!selectedImage}
-                    />
-                    {selectedImage && (
-                        <small style={{ color: "#666", fontSize: "12px" }}>
-                            Remove uploaded image to use URL instead
-                        </small>
-                    )}
-                </div> */}
-
-                        <div className="form-group">
-                            <label htmlFor="imageAlt">Image Alt Text</label>
-                            <input
-                                type="text"
-                                id="imageAlt"
-                                name="imageAlt"
-                                value={formData.imageAlt}
-                                onChange={handleInputChange}
-                                placeholder="Descriptive text for accessibility"
-                            />
-                        </div>
-
-                        {/* {(imagePreview || formData.imageUrl) && (
-              <div className="image-preview">
-                <div className="preview-header">
-                  <h4>Image Preview:</h4>
-                  <button
-                    type="button"
-                    onClick={handleRemoveImage}
-                    className="remove-image-btn"
-                    title="Remove image"
-                  >
-                    <MdDelete size={16} />
-                  </button>
+                    </form>
                 </div>
-                <img
-                  src={imagePreview || formData.imageUrl}
-                  alt={formData.imageAlt || "Banner preview"}
-                  className="preview-image"
-                  onError={(e) => {
-                    setError(
-                      "Failed to load image. Please check the URL or upload a different file."
-                    );
-                  }}
-                />
-                {selectedImage && (
-                  <div className="image-info">
-                    <span>File: {selectedImage.name}</span>
-                    <span>
-                      Size: {(selectedImage.size / 1024 / 1024).toFixed(2)} MB
-                    </span>
-                    <span>Type: {selectedImage.type}</span>
-                  </div>
-                )}
-              </div>
-            )} */}
-                    </div>
-
-                    {/* Link Configuration */}
-                    <div className="form-section">
-                        <div className="section-header">
-                            <MdLink className="section-icon" />
-                            <h3>Link Configuration</h3>
-                        </div>
-
-                        <div className="form-row">
-                            <div className="form-group checkbox-group">
-                                <label className="checkbox-label">
-                                    <input
-                                        type="checkbox"
-                                        name="isClickable"
-                                        checked={formData.isClickable}
-                                        onChange={handleInputChange}
-                                    />
-                                    <span className="checkbox-text">Make banner clickable</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        {formData.isClickable && (
-                            <>
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label htmlFor="link">Destination URL</label>
-                                        <input
-                                            type="url"
-                                            id="link"
-                                            name="link"
-                                            value={formData.link}
-                                            onChange={handleInputChange}
-                                            placeholder="https://example.com/destination"
-                                        />
-                                    </div>
-
-                                    <div className="form-group">
-                                        <label htmlFor="linkTarget">Link Target</label>
-                                        <select
-                                            id="linkTarget"
-                                            name="linkTarget"
-                                            value={formData.linkTarget}
-                                            onChange={handleInputChange}
-                                        >
-                                            <option value="_self">Same Window</option>
-                                            <option value="_blank">New Window</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </>
-                        )}
-                    </div>
-
-                    {/* Placement & Targeting */}
-                    <div className="form-section">
-                        <div className="section-header">
-                            <MdLocationOn className="section-icon" />
-                            <h3>Placement & Targeting</h3>
-                        </div>
-
-                        <div className="form-row">
-                            <div className="form-group">
-                                <label htmlFor="placement">Placement Location *</label>
-                                <select
-                                    id="placement"
-                                    name="placement"
-                                    value={formData.placement}
-                                    onChange={handleInputChange}
-                                    required
-                                >
-                                    {placementOptions.map((option) => (
-                                        <option key={option.value} value={option.value}>
-                                            {option.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="form-group">
-                                <label htmlFor="targetAudience">Target Audience</label>
-                                <select
-                                    id="targetAudience"
-                                    name="targetAudience"
-                                    value={formData.targetAudience}
-                                    onChange={handleInputChange}
-                                >
-                                    {audienceOptions.map((option) => (
-                                        <option key={option.value} value={option.value}>
-                                            {option.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Schedule Configuration */}
-                    <div className="form-section">
-                        <div className="section-header">
-                            <MdSchedule className="section-icon" />
-                            <h3>Schedule Configuration</h3>
-                        </div>
-
-                        <div className="form-row">
-                            <div className="form-group">
-                                <label htmlFor="startDate">Start Date *</label>
-                                <input
-                                    type="datetime-local"
-                                    id="startDate"
-                                    name="startDate"
-                                    value={formData.startDate}
-                                    onChange={handleInputChange}
-                                    required
-                                />
-                            </div>
-
-                            <div className="form-group">
-                                <label htmlFor="endDate">End Date *</label>
-                                <input
-                                    type="datetime-local"
-                                    id="endDate"
-                                    name="endDate"
-                                    value={formData.endDate}
-                                    onChange={handleInputChange}
-                                    required
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Advanced Settings */}
-                    <div className="form-section">
-                        <div className="section-header">
-                            <MdVisibility className="section-icon" />
-                            <h3>Advanced Settings</h3>
-                        </div>
-
-                        <div className="form-row">
-                            <div className="form-group checkbox-group">
-                                <label className="checkbox-label">
-                                    <input
-                                        type="checkbox"
-                                        name="trackingEnabled"
-                                        checked={formData.trackingEnabled}
-                                        onChange={handleInputChange}
-                                    />
-                                    <span className="checkbox-text">Enable click tracking</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div className="form-group">
-                            <label htmlFor="notes">Internal Notes</label>
-                            <textarea
-                                id="notes"
-                                name="notes"
-                                value={formData.notes}
-                                onChange={handleInputChange}
-                                placeholder="Internal notes for team reference"
-                                rows={3}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Form Actions */}
-                    <div className="form-actions">
-                        {/* <button
-              type="button"
-              onClick={handlePreview}
-              className="btn btn-secondary"
-              disabled={loading}
-            >
-              <MdPreview size={20} />
-              Preview Banner
-            </button> */}
-
-                        <button
-                            type="submit"
-                            className="btn btn-secondary"
-                            disabled={loading}
-                        >
-                            <MdSave size={20} />
-                            {loading ? "Saving..." : "Save as Draft"}
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={(e) => handleSubmit(e, "Active")}
-                            className="btn btn-primary"
-                            disabled={loading}
-                        >
-                            <MdVisibility size={20} />
-                            {loading ? "Publishing..." : "Save & Activate"}
-                        </button>
-                    </div>
-                </form>
             </div>
 
             {/* Banner Preview Modal */}
@@ -1398,6 +961,34 @@ function BannerEdit() {
                         align-items: flex-start;
                     }
                 }
+    .editing-badge {
+  display: inline-block;
+  padding: 10px 18px;
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 999px;
+background: linear-gradient(90deg, #3b82f6 0%, #2f6fe4 50%, #2563eb 100%);
+
+  /* Soft blue gradient */
+
+  color: #e6f0ff;
+  border: 1px solid #325d88;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  letter-spacing: 0.5px;
+}
+
+.editing-badge span {
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.editing-badge:hover {
+  transform: translateY(-2px);
+  transition: 0.2s ease;
+}
+
+
             `}</style>
         </div>
     );

@@ -30,7 +30,7 @@ export default function AddStore() {
   };
 
   const handleCancel = () => {
-    navigate("/store/list");
+    navigate("/admin/stores/list");
   };
 
   const handleSubmit = async (e) => {

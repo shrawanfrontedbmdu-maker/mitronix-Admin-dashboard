@@ -43,7 +43,7 @@ function BrandsList() {
       </div>
 
       <div className="page-actions">
-        <Link to="/brands/create" className="btn btn-primary">Add Brand</Link>
+        <Link to="/admin/brands/create" className="btn btn-primary">Add Brand</Link>
       </div>
 
       <div className="content-card">
@@ -65,7 +65,7 @@ function BrandsList() {
                 >
                   {b.name}
                 </div>                <div className="brand-actions">
-                  <button className="btn btn-sm btn-secondary" onClick={() => navigate(`/brands/edit/${b._id}`)}>
+                  <button className="btn btn-sm btn-secondary" onClick={() => navigate(`/admin/brands/edit/${b._id}`)}>
                     <MdEdit size={16} /> Edit
                   </button>
                   <button className="btn btn-sm btn-danger" onClick={() => handleDelete(b._id)}>

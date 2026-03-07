@@ -4,7 +4,7 @@ export const orderService = {
   getOrders: async () => {
     try {
       const response = await requestWithRetry({ url: '/orders', method: 'get' })
-      return Array.isArray(response.data) ? response.data : []
+      return Array.isArray(response.data.orders) ? response.data.orders : []
     } catch (error) {
       console.error('Error fetching orders:', error.response?.status, error.message)
       // Return empty array as fallback

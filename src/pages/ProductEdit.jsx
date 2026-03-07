@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   MdArrowBack,
@@ -6,10 +6,17 @@ import {
   MdDelete,
   MdClose,
   MdCloudUpload,
-  MdAdd,
+  MdLocalOffer,
+  MdEdit,
+  MdCheck,
+  MdToggleOn,
+  MdToggleOff,
 } from "react-icons/md";
 import { productService } from "../api/productService.js";
 import { categoryService } from "../api/categoryService.js";
+import { subcategoryService } from "../api/subcategoryService.js";
+import { filterService } from "../api/filterService.js";
+import { instance } from "../api/axios.config.js";
 
 function ProductEdit() {
   const { id } = useParams();
@@ -21,42 +28,87 @@ function ProductEdit() {
     productKey: "",
     description: "",
     category: "",
+    subcategory: "",
+    filterOptions: [],
     brand: "",
-    modelNumber: "",
-    mrp: "",
-    sellingPrice: "",
-    currency: "INR",
-    sku: "",
-    stockQuantity: 0,
     specifications: [],
     keyFeatures: [],
     variants: [],
-    dimensions: { weight: "", length: "", width: "", height: "", unit: "cm" },
     warranty: "",
     returnPolicy: "",
     isRecommended: false,
     isFeatured: false,
     isDigital: false,
+    allowBackorder: false,
     status: "active",
     metaTitle: "",
     metaDescription: "",
     keywords: [],
     tags: [],
-    existingImages: [], // Cloudinary se aayi hain
-    imagesToDelete: [], // public_ids jo delete karni hain
-    newImageFiles: [], // Naye File objects
+    existingImages: [],
+    imagesToDelete: [],
+    newImageFiles: [],
   });
 
+  // Top Deal state
+  const [selectedTopDeal, setSelectedTopDeal] = useState("");
+  const [originalTopDeal, setOriginalTopDeal] = useState("");
+  const [topDeals, setTopDeals] = useState([]);
+  const [topDealsLoading, setTopDealsLoading] = useState(false);
+  const [showCreateDeal, setShowCreateDeal] = useState(false);
+  const [newDeal, setNewDeal] = useState({ title: "", description: "" });
+  const [newDealImages, setNewDealImages] = useState([]);
+  const [newDealPreviews, setNewDealPreviews] = useState([]);
+  const [creating, setCreating] = useState(false);
+  const [editingDeal, setEditingDeal] = useState(null);
+  const [editDealData, setEditDealData] = useState({
+    title: "",
+    description: "",
+  });
+  const [editDealImages, setEditDealImages] = useState([]);
+  const [editDealPreviews, setEditDealPreviews] = useState([]);
+  const [editDealExisting, setEditDealExisting] = useState([]);
+  const [editDealToDelete, setEditDealToDelete] = useState([]);
+  const [updating, setUpdating] = useState(false);
+  const [deletingDealId, setDeletingDealId] = useState(null);
+  const newDealImgRef = useRef();
+  const editDealImgRef = useRef();
+
+  // Other state
   const [imagePreviews, setImagePreviews] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [subcategories, setSubcategories] = useState([]);
+  const [filterGroups, setFilterGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [priceValidationMessage, setPriceValidationMessage] = useState("");
   const [dragOver, setDragOver] = useState(false);
 
-  /* ===== FETCH PRODUCT + CATEGORIES ===== */
+  // ── Load subcategories ──
+  const loadSubcategories = async (categoryId) => {
+    if (!categoryId) return;
+    try {
+      const data =
+        await subcategoryService.getSubcategoriesByCategory(categoryId);
+      setSubcategories(data || []);
+    } catch {
+      setSubcategories([]);
+    }
+  };
+
+  // ── Load filter groups ──
+  const loadFilterGroups = async (categoryId) => {
+    if (!categoryId) return;
+    try {
+      const groups = await filterService.getFilterGroupsByCategory(categoryId);
+      setFilterGroups(groups || []);
+    } catch {
+      setFilterGroups([]);
+    }
+  };
+
+  // ── Fetch product + categories ──
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -65,38 +117,39 @@ function ProductEdit() {
           productService.getProductById(id),
           categoryService.getCategories(),
         ]);
-
         const product = productResponse.product || productResponse;
+        const catList = categoriesData.categories || categoriesData;
+        setCategories(catList);
 
         if (product) {
+          const catId = product.category?._id || product.category || "";
           setFormData({
             name: product.name || "",
             slug: product.slug || "",
             productKey: product.productKey || "",
             description: product.description || "",
-            category: product.category?._id || product.category || "",
+            category: catId,
+            subcategory: product.subcategory?._id || product.subcategory || "",
+            filterOptions: (product.filterOptions || []).map((f) => f._id || f),
             brand: product.brand || "",
-            modelNumber: product.modelNumber || "",
-            mrp: product.mrp || "",
-            sellingPrice: product.sellingPrice || "",
-            currency: product.currency || "INR",
-            sku: product.sku || "",
-            stockQuantity: product.stockQuantity || 0,
             specifications: product.specifications || [],
             keyFeatures: product.keyFeatures || [],
-            variants: product.variants || [],
-            dimensions: product.dimensions || {
-              weight: "",
-              length: "",
-              width: "",
-              height: "",
-              unit: "cm",
-            },
+            // ✅ variant images (existing URLs) preserve karo
+            variants: (product.variants || []).map((v) => ({
+              ...v,
+              images: (v.images || []).map((img) => ({
+                ...img,
+                isExisting: true, // mark existing images
+              })),
+              specifications: v.specifications || [],
+              keyFeatures: v.keyFeatures || [],
+            })),
             warranty: product.warranty || "",
             returnPolicy: product.returnPolicy || "",
             isRecommended: product.isRecommended || false,
             isFeatured: product.isFeatured || false,
             isDigital: product.isDigital || false,
+            allowBackorder: product.allowBackorder || false,
             status: product.status || "active",
             metaTitle: product.metaTitle || "",
             metaDescription: product.metaDescription || "",
@@ -106,30 +159,50 @@ function ProductEdit() {
             imagesToDelete: [],
             newImageFiles: [],
           });
+          const dealId = product.topDeal?._id || product.topDeal || "";
+          setSelectedTopDeal(dealId.toString());
+          setOriginalTopDeal(dealId.toString());
+          if (catId) {
+            loadSubcategories(catId);
+            loadFilterGroups(catId);
+          }
         } else {
           setError("Product not found");
         }
-
-        setCategories(categoriesData.categories || categoriesData);
       } catch (err) {
         console.error("Error fetching data:", err);
-        setError("Failed to load product data. Please try again.");
+        setError("Failed to load product data.");
       } finally {
         setLoading(false);
       }
     };
-
     if (id) fetchData();
   }, [id]);
 
-  /* ===== CLEANUP BLOB URLs ON UNMOUNT ===== */
+  // ── Fetch top deals ──
+  const fetchTopDeals = async () => {
+    try {
+      setTopDealsLoading(true);
+      const { data } = await instance.get("/top-deals");
+      if (data.success) setTopDeals(data.topDeals || []);
+    } catch (err) {
+      console.error(
+        "Top deals fetch error:",
+        err.response?.data || err.message,
+      );
+    } finally {
+      setTopDealsLoading(false);
+    }
+  };
   useEffect(() => {
-    return () => {
-      imagePreviews.forEach((url) => URL.revokeObjectURL(url));
-    };
+    if (id) fetchTopDeals();
+  }, [id]);
+
+  useEffect(() => {
+    return () => imagePreviews.forEach((url) => URL.revokeObjectURL(url));
   }, [imagePreviews]);
 
-  /* ===== HELPERS ===== */
+  // ── Helpers ──
   const generateSlug = (name) =>
     name
       .toLowerCase()
@@ -138,39 +211,25 @@ function ProductEdit() {
       .replace(/[\s_-]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
-  const validatePricing = (sellingPrice, mrp) => {
-    if (sellingPrice && mrp && parseFloat(sellingPrice) > parseFloat(mrp)) {
-      setPriceValidationMessage("⚠️ Selling price cannot be higher than MRP");
-    } else {
-      setPriceValidationMessage("");
-    }
-  };
-
-  /* ===== INPUT HANDLERS ===== */
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     const val = type === "checkbox" ? checked : value;
-
     setFormData((prev) => {
-      if (name.includes(".")) {
-        const [parent, child] = name.split(".");
-        return { ...prev, [parent]: { ...prev[parent], [child]: val } };
-      }
       const newData = { ...prev, [name]: val };
-      if (name === "name") {
-        newData.slug = generateSlug(val);
-        if (!prev.metaTitle) newData.metaTitle = val;
-      }
-      if (name === "sellingPrice" || name === "mrp") {
-        const sp = name === "sellingPrice" ? val : newData.sellingPrice;
-        const mrp = name === "mrp" ? val : newData.mrp;
-        validatePricing(sp, mrp);
+      if (name === "name") newData.slug = generateSlug(val);
+      if (name === "category") {
+        newData.subcategory = "";
+        newData.filterOptions = [];
+        setSubcategories([]);
+        setFilterGroups([]);
+        loadSubcategories(val);
+        loadFilterGroups(val);
       }
       return newData;
     });
   };
 
-  /* ===== SPECIFICATIONS ===== */
+  // ── Specifications ──
   const handleSpecificationChange = (index, field, value) => {
     const updated = [...formData.specifications];
     updated[index][field] = value;
@@ -187,7 +246,7 @@ function ProductEdit() {
       specifications: prev.specifications.filter((_, i) => i !== index),
     }));
 
-  /* ===== KEY FEATURES ===== */
+  // ── Key Features ──
   const handleKeyFeatureChange = (index, field, value) => {
     const updated = [...formData.keyFeatures];
     updated[index][field] = value;
@@ -204,43 +263,20 @@ function ProductEdit() {
       keyFeatures: prev.keyFeatures.filter((_, i) => i !== index),
     }));
 
-  /* ===== VARIANTS ===== */
+  // ── Variants ──
   const handleVariantChange = (index, field, value) => {
     const updatedVariants = [...formData.variants];
     if (field.includes(".")) {
       const [parent, child] = field.split(".");
-      if (!updatedVariants[index][parent]) updatedVariants[index][parent] = {};
-      updatedVariants[index][parent][child] = value;
+      updatedVariants[index][parent] = {
+        ...updatedVariants[index][parent],
+        [child]: value,
+      };
     } else {
       updatedVariants[index][field] = value;
     }
     setFormData((prev) => ({ ...prev, variants: updatedVariants }));
   };
-
-  const handleVariantSpecChange = (variantIndex, specIndex, field, value) => {
-    const updatedVariants = [...formData.variants];
-    if (!updatedVariants[variantIndex].specifications)
-      updatedVariants[variantIndex].specifications = [];
-    updatedVariants[variantIndex].specifications[specIndex][field] = value;
-    setFormData((prev) => ({ ...prev, variants: updatedVariants }));
-  };
-
-  const addVariantSpecification = (variantIndex) => {
-    const updatedVariants = [...formData.variants];
-    if (!updatedVariants[variantIndex].specifications)
-      updatedVariants[variantIndex].specifications = [];
-    updatedVariants[variantIndex].specifications.push({ key: "", value: "" });
-    setFormData((prev) => ({ ...prev, variants: updatedVariants }));
-  };
-
-  const removeVariantSpecification = (variantIndex, specIndex) => {
-    const updatedVariants = [...formData.variants];
-    updatedVariants[variantIndex].specifications = updatedVariants[
-      variantIndex
-    ].specifications.filter((_, i) => i !== specIndex);
-    setFormData((prev) => ({ ...prev, variants: updatedVariants }));
-  };
-
   const addVariant = () =>
     setFormData((prev) => ({
       ...prev,
@@ -248,32 +284,58 @@ function ProductEdit() {
         ...prev.variants,
         {
           sku: "",
-          price: "",
-          mrp: "",
-          stockQuantity: 0,
-          dimensions: {
-            weight: "",
-            length: "",
-            width: "",
-            height: "",
-            unit: "cm",
-          },
+          price: 0,
+          mrp: 0,
           attributes: { color: "", size: "", model: "" },
           images: [],
           specifications: [],
+          keyFeatures: [],
           isActive: true,
         },
       ],
     }));
-
   const removeVariant = (index) =>
     setFormData((prev) => ({
       ...prev,
       variants: prev.variants.filter((_, i) => i !== index),
     }));
 
-  /* ===== IMAGE HANDLERS ===== */
-  const handleImageUpload = (files) => {
+  // ── Variant Specifications ──
+  const addVariantSpecification = (vi) => {
+    const v = [...formData.variants];
+    v[vi].specifications.push({ key: "", value: "" });
+    setFormData({ ...formData, variants: v });
+  };
+  const handleVariantSpecificationChange = (vi, si, field, value) => {
+    const v = [...formData.variants];
+    v[vi].specifications[si][field] = value;
+    setFormData({ ...formData, variants: v });
+  };
+  const removeVariantSpecification = (vi, si) => {
+    const v = [...formData.variants];
+    v[vi].specifications.splice(si, 1);
+    setFormData({ ...formData, variants: v });
+  };
+
+  // ── Variant Key Features ──
+  const addVariantKeyFeature = (vi) => {
+    const v = [...formData.variants];
+    v[vi].keyFeatures.push({ key: "", value: "" });
+    setFormData({ ...formData, variants: v });
+  };
+  const handleVariantKeyFeatureChange = (vi, fi, field, value) => {
+    const v = [...formData.variants];
+    v[vi].keyFeatures[fi][field] = value;
+    setFormData({ ...formData, variants: v });
+  };
+  const removeVariantKeyFeature = (vi, fi) => {
+    const v = [...formData.variants];
+    v[vi].keyFeatures.splice(fi, 1);
+    setFormData({ ...formData, variants: v });
+  };
+
+  // ── Variant Images ──
+  const handleVariantImageUpload = (variantIndex, files) => {
     const validTypes = [
       "image/jpeg",
       "image/jpg",
@@ -281,12 +343,11 @@ function ProductEdit() {
       "image/gif",
       "image/webp",
     ];
-    const maxImages = 5;
-    const remaining =
-      maxImages -
-      (formData.existingImages.length + formData.newImageFiles.length);
+    const updated = [...formData.variants];
+    const existing = updated[variantIndex]?.images || [];
+    const max = 3;
+    const remaining = max - existing.length;
     const filesToProcess = Array.from(files).slice(0, remaining);
-
     const validFiles = filesToProcess.filter((file) => {
       if (!validTypes.includes(file.type)) {
         setError(`Invalid type: ${file.name}`);
@@ -298,15 +359,63 @@ function ProductEdit() {
       }
       return true;
     });
+    const newImgs = validFiles.map((file) => ({
+      file,
+      preview: URL.createObjectURL(file),
+      id: Date.now() + Math.random(),
+      isExisting: false,
+    }));
+    updated[variantIndex].images = [...existing, ...newImgs];
+    setFormData((prev) => ({ ...prev, variants: updated }));
+  };
 
-    const newPreviews = validFiles.map((file) => URL.createObjectURL(file));
-    setImagePreviews((prev) => [...prev, ...newPreviews]);
+  const removeVariantImage = (variantIndex, imgId, publicId) => {
+    const updated = [...formData.variants];
+    const imgsArr = updated[variantIndex]?.images || [];
+    const removed = imgsArr.find(
+      (img) => (img.id || img.public_id) === (imgId || publicId),
+    );
+    if (removed?.preview && !removed.isExisting)
+      URL.revokeObjectURL(removed.preview);
+    updated[variantIndex].images = imgsArr.filter(
+      (img) => (img.id || img.public_id) !== (imgId || publicId),
+    );
+    setFormData((prev) => ({ ...prev, variants: updated }));
+  };
+
+  // ── Main Images ──
+  const handleImageUpload = (files) => {
+    const validTypes = [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+    ];
+    const remaining =
+      5 - (formData.existingImages.length + formData.newImageFiles.length);
+    const validFiles = Array.from(files)
+      .slice(0, remaining)
+      .filter((file) => {
+        if (!validTypes.includes(file.type)) {
+          setError(`Invalid file type: ${file.name}`);
+          return false;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          setError(`File too large: ${file.name}`);
+          return false;
+        }
+        return true;
+      });
+    setImagePreviews((prev) => [
+      ...prev,
+      ...validFiles.map((f) => URL.createObjectURL(f)),
+    ]);
     setFormData((prev) => ({
       ...prev,
       newImageFiles: [...prev.newImageFiles, ...validFiles],
     }));
   };
-
   const handleFileSelect = (e) => handleImageUpload(e.target.files);
   const handleDrop = (e) => {
     e.preventDefault();
@@ -321,9 +430,7 @@ function ProductEdit() {
     e.preventDefault();
     setDragOver(false);
   };
-
-  // Existing image remove — public_id ko imagesToDelete mein daalo
-  const handleDeleteExistingImage = (image) => {
+  const handleDeleteExistingImage = (image) =>
     setFormData((prev) => ({
       ...prev,
       existingImages: prev.existingImages.filter(
@@ -331,9 +438,6 @@ function ProductEdit() {
       ),
       imagesToDelete: [...prev.imagesToDelete, image.public_id],
     }));
-  };
-
-  // New image preview remove
   const handleRemoveNewImage = (index) => {
     URL.revokeObjectURL(imagePreviews[index]);
     setFormData((prev) => ({
@@ -343,13 +447,140 @@ function ProductEdit() {
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  /* ===== SUBMIT ===== */
+  // ── Top Deal: Create ──
+  const handleCreateDeal = async () => {
+    if (!newDeal.title.trim()) return;
+    setCreating(true);
+    try {
+      const fd = new FormData();
+      fd.append("title", newDeal.title.trim());
+      fd.append("description", newDeal.description.trim());
+      newDealImages.forEach((file, idx) =>
+        fd.append(idx === 0 ? "image" : "images", file),
+      );
+      const { data } = await instance.post("/top-deals", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (data.success) {
+        await fetchTopDeals();
+        setSelectedTopDeal(data.topDeal._id);
+        setShowCreateDeal(false);
+        setNewDeal({ title: "", description: "" });
+        setNewDealImages([]);
+        newDealPreviews.forEach((p) => URL.revokeObjectURL(p));
+        setNewDealPreviews([]);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to create deal");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // ── Top Deal: Edit ──
+  const openEditDeal = (deal) => {
+    setEditingDeal(deal);
+    setEditDealData({ title: deal.title, description: deal.description || "" });
+    setEditDealExisting([
+      ...(deal.image ? [deal.image] : []),
+      ...(deal.images || []),
+    ]);
+    setEditDealToDelete([]);
+    setEditDealImages([]);
+    setEditDealPreviews([]);
+  };
+  const closeEditDeal = () => {
+    setEditingDeal(null);
+    editDealPreviews.forEach((p) => URL.revokeObjectURL(p));
+    setEditDealPreviews([]);
+    setEditDealImages([]);
+  };
+  const handleUpdateDeal = async () => {
+    if (!editDealData.title.trim()) return;
+    setUpdating(true);
+    try {
+      const fd = new FormData();
+      fd.append("title", editDealData.title.trim());
+      fd.append("description", editDealData.description.trim());
+      if (editDealToDelete.length)
+        fd.append("imagesToDelete", JSON.stringify(editDealToDelete));
+      editDealImages.forEach((file, idx) =>
+        fd.append(idx === 0 ? "image" : "images", file),
+      );
+      const { data } = await instance.put(`/top-deals/${editingDeal._id}`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (data.success) {
+        await fetchTopDeals();
+        closeEditDeal();
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to update deal");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // ── Top Deal: Delete ──
+  const handleDeleteDeal = async (dealId) => {
+    if (!window.confirm("Delete this deal? This cannot be undone.")) return;
+    setDeletingDealId(dealId);
+    try {
+      const { data } = await instance.delete(`/top-deals/${dealId}`);
+      if (data.success) {
+        if (selectedTopDeal === dealId) setSelectedTopDeal("");
+        if (originalTopDeal === dealId) setOriginalTopDeal("");
+        await fetchTopDeals();
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to delete deal");
+    } finally {
+      setDeletingDealId(null);
+    }
+  };
+
+  // ── Top Deal: Toggle ──
+  const handleToggleDealStatus = async (dealId) => {
+    try {
+      const { data } = await instance.patch(
+        `/top-deals/${dealId}/toggle-status`,
+      );
+      if (data.success) await fetchTopDeals();
+    } catch {
+      setError("Failed to toggle deal status");
+    }
+  };
+
+  // ── Top Deal: Sync — ✅ FIXED routes use product routes ──
+  const syncTopDeal = async () => {
+    if (selectedTopDeal === originalTopDeal) return;
+    try {
+      if (originalTopDeal) {
+        // ✅ Sahi route: /products/top-deals/:id/remove-product
+        await instance.patch(
+          `/products/top-deals/${originalTopDeal}/remove-product`,
+          { productId: id },
+        );
+      }
+      if (selectedTopDeal) {
+        // ✅ Sahi route: /products/top-deals/:id/add-product
+        await instance.patch(
+          `/products/top-deals/${selectedTopDeal}/add-product`,
+          { productId: id },
+        );
+      }
+      setOriginalTopDeal(selectedTopDeal);
+    } catch (err) {
+      console.error("Sync top deal error:", err.response?.data || err.message);
+      throw err;
+    }
+  };
+
+  // ── Submit ──
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
-
-    /* ===== CLIENT SIDE VALIDATION ===== */
     if (
       !formData.name ||
       !formData.productKey ||
@@ -361,140 +592,65 @@ function ProductEdit() {
       setError("Please fill all required fields");
       return;
     }
-
-    if (
-      formData.mrp &&
-      formData.sellingPrice &&
-      parseFloat(formData.sellingPrice) > parseFloat(formData.mrp)
-    ) {
-      setError("Selling price cannot be higher than MRP");
+    // ✅ images wale variants bhi include karo
+    const cleanedVariants = formData.variants.filter(
+      (v) => v.sku || v.price || v.images?.length > 0,
+    );
+    if (cleanedVariants.length === 0) {
+      setError("At least one variant is required");
       return;
     }
 
     setSaving(true);
-
     try {
-      /* ===== VARIANTS CLEAN + VALIDATE ===== */
-      const cleanedVariants = formData.variants.filter(
-        (v) =>
-          (v.sku && v.sku.trim() !== "") ||
-          (v.price && parseFloat(v.price) > 0) ||
-          (v.attributes?.color && v.attributes.color.trim() !== "") ||
-          (v.attributes?.size && v.attributes.size.trim() !== "") ||
-          (v.attributes?.model && v.attributes.model.trim() !== "") ||
-          (v.stockQuantity && parseInt(v.stockQuantity) > 0),
-      );
-
-      const isVariantProduct = cleanedVariants.length > 0;
-
-      /* ===== BUILD updateData ===== */
       const updateData = {
         name: formData.name,
         slug: formData.slug,
         productKey: formData.productKey,
         description: formData.description,
         category: formData.category,
+        subcategory: formData.subcategory || undefined,
         brand: formData.brand || undefined,
-        modelNumber: formData.modelNumber || undefined,
-        specifications: formData.specifications.filter((s) => s.key || s.value),
-        keyFeatures: formData.keyFeatures.filter((kf) => kf.key || kf.value),
+        filterOptions: formData.filterOptions || [],
         warranty: formData.warranty,
         returnPolicy: formData.returnPolicy,
         isRecommended: !!formData.isRecommended,
         isFeatured: !!formData.isFeatured,
         isDigital: !!formData.isDigital,
+        allowBackorder: !!formData.allowBackorder,
         status: formData.status,
         metaTitle: formData.metaTitle || undefined,
         metaDescription: formData.metaDescription || undefined,
-        keywords: formData.keywords.length > 0 ? formData.keywords : undefined,
-        tags: formData.tags.length > 0 ? formData.tags : undefined,
-
-        // Images — backend ke liye teen alag fields
-        imagesToDelete: formData.imagesToDelete, // public_ids (JSON array)
-        newImageFiles: formData.newImageFiles, // File objects (FormData mein jayenge)
+        specifications: formData.specifications.filter((s) => s.key || s.value),
+        keyFeatures: formData.keyFeatures.filter((kf) => kf.key || kf.value),
+        keywords: formData.keywords.length > 0 ? formData.keywords : [],
+        tags: formData.tags.length > 0 ? formData.tags : [],
+        // ✅ variant images with file objects — productService filter karega
+        variants: cleanedVariants.map((v) => ({
+          sku: v.sku || `SKU-${Date.now()}`,
+          price: v.price ? parseFloat(v.price) : 0,
+          mrp: v.mrp ? parseFloat(v.mrp) : undefined,
+          currency: v.currency || "INR",
+          attributes: {
+            color: v.attributes?.color || undefined,
+            size: v.attributes?.size || undefined,
+            model: v.attributes?.model || undefined,
+          },
+          images: v.images || [],
+          specifications: v.specifications || [],
+          keyFeatures: v.keyFeatures || [],
+          isActive: v.isActive !== undefined ? v.isActive : true,
+          dimensions: v.dimensions || {},
+          stockQuantity: v.stockQuantity,
+          stockStatus: v.stockStatus,
+          hasStock: v.hasStock,
+        })),
+        existingImages: formData.existingImages,
+        imagesToDelete: formData.imagesToDelete,
+        newImageFiles: formData.newImageFiles,
       };
-
-      if (isVariantProduct) {
-        updateData.variants = cleanedVariants.map((v) => {
-          const base = formData.productKey || formData.slug;
-          const colorPart = v.attributes?.color || "NA";
-          const sizePart = v.attributes?.size || "NA";
-
-          const variantSku =
-            v.sku && v.sku.trim() !== ""
-              ? v.sku
-              : `${base}-${colorPart}-${sizePart}-${Date.now()}`;
-
-          const variantPrice =
-            v.price && parseFloat(v.price) > 0 ? parseFloat(v.price) : 0;
-
-          return {
-            sku: variantSku,
-            price: variantPrice,
-            mrp: v.mrp && parseFloat(v.mrp) > 0 ? parseFloat(v.mrp) : undefined,
-            stockQuantity: v.stockQuantity ? parseInt(v.stockQuantity) : 0,
-            currency: "INR",
-            dimensions: {
-              weight: v.dimensions?.weight
-                ? parseFloat(v.dimensions.weight)
-                : undefined,
-              length: v.dimensions?.length
-                ? parseFloat(v.dimensions.length)
-                : undefined,
-              width: v.dimensions?.width
-                ? parseFloat(v.dimensions.width)
-                : undefined,
-              height: v.dimensions?.height
-                ? parseFloat(v.dimensions.height)
-                : undefined,
-              unit: v.dimensions?.unit || "cm",
-            },
-            attributes: {
-              color: v.attributes?.color || undefined,
-              size: v.attributes?.size || undefined,
-              model: v.attributes?.model || undefined,
-            },
-            images: v.images || [],
-            specifications:
-              v.specifications?.filter((s) => s.key || s.value) || [],
-            isActive: v.isActive !== undefined ? v.isActive : true,
-          };
-        });
-      } else {
-        // Non-variant product fields
-        updateData.sku =
-          formData.sku || `${formData.productKey}-main-${Date.now()}`;
-        updateData.sellingPrice = formData.sellingPrice
-          ? parseFloat(formData.sellingPrice)
-          : undefined;
-        updateData.mrp = formData.mrp ? parseFloat(formData.mrp) : undefined;
-        updateData.stockQuantity = formData.stockQuantity
-          ? parseInt(formData.stockQuantity)
-          : 0;
-        updateData.dimensions = {
-          weight: formData.dimensions.weight
-            ? parseFloat(formData.dimensions.weight)
-            : undefined,
-          length: formData.dimensions.length
-            ? parseFloat(formData.dimensions.length)
-            : undefined,
-          width: formData.dimensions.width
-            ? parseFloat(formData.dimensions.width)
-            : undefined,
-          height: formData.dimensions.height
-            ? parseFloat(formData.dimensions.height)
-            : undefined,
-          unit: formData.dimensions.unit || "cm",
-        };
-      }
-
-      /* ===== API CALL ===== */
-      // productService.updateProduct internally banayega FormData:
-      //   - simpleFields   → formData.append(key, value)
-      //   - jsonFields     → formData.append(key, JSON.stringify(value))
-      //   - newImageFiles  → formData.append("images", file) for each
       await productService.updateProduct(id, updateData);
-
+      await syncTopDeal();
       setSuccess("Product updated successfully!");
       setTimeout(() => navigate(`/admin/products/details/${id}`), 1500);
     } catch (err) {
@@ -509,7 +665,6 @@ function ProductEdit() {
     }
   };
 
-  /* ===== DELETE ===== */
   const handleDeleteProduct = async () => {
     if (
       window.confirm(
@@ -519,15 +674,23 @@ function ProductEdit() {
       try {
         await productService.deleteProduct(id);
         navigate("/admin/products/list");
-      } catch (err) {
-        console.error("Error deleting product:", err);
+      } catch {
         setError("Failed to delete product");
       }
     }
   };
 
-  /* ===== LOADING STATE ===== */
-  if (loading) {
+  const inp = {
+    width: "100%",
+    padding: "10px 12px",
+    border: "1px solid #d1d5db",
+    borderRadius: "8px",
+    fontSize: "14px",
+    outline: "none",
+    boxSizing: "border-box",
+  };
+
+  if (loading)
     return (
       <div
         style={{
@@ -543,7 +706,6 @@ function ProductEdit() {
             padding: "32px",
             backgroundColor: "white",
             borderRadius: "12px",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
             textAlign: "center",
           }}
         >
@@ -552,7 +714,7 @@ function ProductEdit() {
               width: "40px",
               height: "40px",
               border: "4px solid #f3f4f6",
-              borderTop: "4px solid #667eea",
+              borderTop: "4px solid #3b82f6",
               borderRadius: "50%",
               animation: "spin 1s linear infinite",
               margin: "0 auto 16px",
@@ -566,9 +728,7 @@ function ProductEdit() {
         </div>
       </div>
     );
-  }
 
-  /* ===== RENDER ===== */
   return (
     <div
       style={{
@@ -595,21 +755,20 @@ function ProductEdit() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
           }}
         >
           <div>
             <h1
               style={{
-                fontSize: "28px",
-                fontWeight: "700",
+                fontSize: "24px",
+                fontWeight: "600",
                 margin: "0 0 4px 0",
-                color: "#fff",
+                color: "#111827",
               }}
             >
               Edit Product
             </h1>
-            <p style={{ fontSize: "14px", color: "#e0e7ff", margin: 0 }}>
+            <p style={{ fontSize: "14px", color: "#6b7280", margin: 0 }}>
               Update product information and images
             </p>
           </div>
@@ -619,21 +778,20 @@ function ProductEdit() {
               display: "flex",
               alignItems: "center",
               gap: "8px",
-              padding: "10px 20px",
-              backgroundColor: "rgba(255,255,255,0.2)",
-              color: "#fff",
+              padding: "10px 16px",
+              backgroundColor: "#f3f4f6",
+              color: "#374151",
               borderRadius: "8px",
               textDecoration: "none",
               fontSize: "14px",
               fontWeight: "500",
-              border: "1px solid rgba(255,255,255,0.3)",
+              border: "1px solid #e5e7eb",
             }}
           >
-            <MdArrowBack size={18} /> Back to Details
+            <MdArrowBack size={16} /> Back to Details
           </Link>
         </div>
 
-        {/* Alerts */}
         {error && (
           <div
             style={{
@@ -641,15 +799,11 @@ function ProductEdit() {
               backgroundColor: "#fef2f2",
               border: "1px solid #fecaca",
               color: "#dc2626",
-              padding: "14px 18px",
+              padding: "12px 16px",
               borderRadius: "8px",
               fontSize: "14px",
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
             }}
           >
-            <span style={{ fontSize: "18px" }}>⚠️</span>
             {error}
           </div>
         )}
@@ -660,21 +814,16 @@ function ProductEdit() {
               backgroundColor: "#f0fdf4",
               border: "1px solid #bbf7d0",
               color: "#166534",
-              padding: "14px 18px",
+              padding: "12px 16px",
               borderRadius: "8px",
               fontSize: "14px",
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
             }}
           >
-            <span style={{ fontSize: "18px" }}>✓</span>
             {success}
           </div>
         )}
 
         <form onSubmit={handleSubmit} style={{ position: "relative" }}>
-          {/* Saving Overlay */}
           {saving && (
             <div
               style={{
@@ -683,62 +832,51 @@ function ProductEdit() {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                backgroundColor: "rgba(0,0,0,0.5)",
+                backgroundColor: "rgba(0,0,0,0.3)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 zIndex: 9999,
-                backdropFilter: "blur(4px)",
               }}
             >
               <div
                 style={{
-                  padding: "40px",
+                  padding: "32px",
                   backgroundColor: "white",
-                  borderRadius: "16px",
-                  boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+                  borderRadius: "12px",
                   textAlign: "center",
                 }}
               >
                 <div
                   style={{
-                    width: "50px",
-                    height: "50px",
-                    border: "5px solid #f3f4f6",
-                    borderTop: "5px solid #667eea",
+                    width: "40px",
+                    height: "40px",
+                    border: "4px solid #f3f4f6",
+                    borderTop: "4px solid #3b82f6",
                     borderRadius: "50%",
                     animation: "spin 1s linear infinite",
-                    margin: "0 auto 20px",
+                    margin: "0 auto 16px",
                   }}
                 />
                 <div
                   style={{
-                    fontSize: "18px",
-                    fontWeight: "600",
+                    fontSize: "16px",
+                    fontWeight: "500",
                     color: "#111827",
                   }}
                 >
                   Updating product...
-                </div>
-                <div
-                  style={{
-                    fontSize: "14px",
-                    color: "#6b7280",
-                    marginTop: "8px",
-                  }}
-                >
-                  Please wait while we save your changes
                 </div>
               </div>
             </div>
           )}
 
           <div style={{ padding: "32px" }}>
-            {/* ===== PRODUCT IMAGES ===== */}
-            <div style={{ marginBottom: "40px" }}>
+            {/* ══ MAIN IMAGES ══ */}
+            <div style={{ marginBottom: "32px" }}>
               <h3
                 style={{
-                  fontSize: "18px",
+                  fontSize: "16px",
                   fontWeight: "600",
                   marginBottom: "16px",
                   color: "#111827",
@@ -746,8 +884,6 @@ function ProductEdit() {
               >
                 Product Images
               </h3>
-
-              {/* Existing Images */}
               {formData.existingImages.length > 0 && (
                 <div style={{ marginBottom: "24px" }}>
                   <label
@@ -765,7 +901,7 @@ function ProductEdit() {
                     style={{
                       display: "grid",
                       gridTemplateColumns:
-                        "repeat(auto-fill, minmax(140px, 1fr))",
+                        "repeat(auto-fill, minmax(120px, 1fr))",
                       gap: "16px",
                     }}
                   >
@@ -774,10 +910,9 @@ function ProductEdit() {
                         key={image.public_id}
                         style={{
                           position: "relative",
-                          borderRadius: "10px",
+                          borderRadius: "8px",
                           overflow: "hidden",
-                          border: "2px solid #e5e7eb",
-                          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                          border: "1px solid #e5e7eb",
                         }}
                       >
                         <img
@@ -785,7 +920,7 @@ function ProductEdit() {
                           alt="Product"
                           style={{
                             width: "100%",
-                            height: "140px",
+                            height: "120px",
                             objectFit: "cover",
                           }}
                         />
@@ -800,14 +935,12 @@ function ProductEdit() {
                             color: "white",
                             border: "none",
                             borderRadius: "50%",
-                            width: "28px",
-                            height: "28px",
+                            width: "24px",
+                            height: "24px",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             cursor: "pointer",
-                            fontSize: "18px",
-                            boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
                           }}
                         >
                           <MdClose />
@@ -817,8 +950,6 @@ function ProductEdit() {
                   </div>
                 </div>
               )}
-
-              {/* New Image Previews */}
               {imagePreviews.length > 0 && (
                 <div style={{ marginBottom: "24px" }}>
                   <label
@@ -836,7 +967,7 @@ function ProductEdit() {
                     style={{
                       display: "grid",
                       gridTemplateColumns:
-                        "repeat(auto-fill, minmax(140px, 1fr))",
+                        "repeat(auto-fill, minmax(120px, 1fr))",
                       gap: "16px",
                     }}
                   >
@@ -845,10 +976,9 @@ function ProductEdit() {
                         key={index}
                         style={{
                           position: "relative",
-                          borderRadius: "10px",
+                          borderRadius: "8px",
                           overflow: "hidden",
-                          border: "2px solid #e5e7eb",
-                          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                          border: "1px solid #e5e7eb",
                         }}
                       >
                         <img
@@ -856,7 +986,7 @@ function ProductEdit() {
                           alt="Preview"
                           style={{
                             width: "100%",
-                            height: "140px",
+                            height: "120px",
                             objectFit: "cover",
                           }}
                         />
@@ -871,14 +1001,12 @@ function ProductEdit() {
                             color: "white",
                             border: "none",
                             borderRadius: "50%",
-                            width: "28px",
-                            height: "28px",
+                            width: "24px",
+                            height: "24px",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             cursor: "pointer",
-                            fontSize: "18px",
-                            boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
                           }}
                         >
                           <MdClose />
@@ -888,1677 +1016,1755 @@ function ProductEdit() {
                   </div>
                 </div>
               )}
-
-              {/* Upload Area */}
               <div
-                onClick={() => document.getElementById("file-input").click()}
+                onClick={() =>
+                  document.getElementById("edit-file-input").click()
+                }
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 style={{
                   border: dragOver
-                    ? "2px dashed #667eea"
+                    ? "2px dashed #3b82f6"
                     : "2px dashed #d1d5db",
                   borderRadius: "12px",
-                  padding: "48px",
+                  padding: "32px",
                   textAlign: "center",
                   cursor: "pointer",
-                  backgroundColor: dragOver ? "#f5f3ff" : "#fafafa",
-                  transition: "all 0.3s ease",
+                  backgroundColor: dragOver ? "#eff6ff" : "#fafafa",
+                  transition: "all 0.2s",
                 }}
               >
+                <MdCloudUpload
+                  size={36}
+                  style={{ color: "#9ca3af", marginBottom: "12px" }}
+                />
                 <div
                   style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
+                    fontSize: "14px",
+                    color: "#374151",
+                    marginBottom: "8px",
+                    fontWeight: "500",
                   }}
                 >
-                  <MdCloudUpload
-                    size={56}
-                    style={{
-                      color: dragOver ? "#667eea" : "#9ca3af",
-                      marginBottom: "16px",
-                    }}
-                  />
-                  <div
-                    style={{
-                      fontSize: "15px",
-                      color: "#374151",
-                      marginBottom: "8px",
-                      fontWeight: "600",
-                    }}
-                  >
-                    {dragOver ? "Drop images here" : "Add more images"}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "13px",
-                      color: "#6b7280",
-                      marginBottom: "12px",
-                    }}
-                  >
-                    or click to browse from your computer
-                  </div>
-                  <div
-                    style={{
-                      display: "inline-block",
-                      padding: "8px 16px",
-                      backgroundColor: "#667eea",
-                      color: "white",
-                      borderRadius: "6px",
-                      fontSize: "13px",
-                      fontWeight: "500",
-                    }}
-                  >
-                    {formData.existingImages.length +
-                      formData.newImageFiles.length}
-                    /5 images
-                  </div>
+                  {formData.existingImages.length +
+                    formData.newImageFiles.length >=
+                  5
+                    ? "Maximum images reached"
+                    : "Click or drag to add images"}
+                </div>
+                <div style={{ fontSize: "13px", color: "#6b7280" }}>
+                  {formData.existingImages.length +
+                    formData.newImageFiles.length}
+                  /5 images
                 </div>
               </div>
               <input
-                id="file-input"
+                id="edit-file-input"
                 type="file"
                 multiple
                 accept="image/*"
                 onChange={handleFileSelect}
                 style={{ display: "none" }}
+                disabled={
+                  formData.existingImages.length +
+                    formData.newImageFiles.length >=
+                  5
+                }
               />
             </div>
 
-            {/* ===== BASIC INFORMATION ===== */}
-            <div
-              style={{
-                marginBottom: "40px",
-                padding: "24px",
-                backgroundColor: "#f9fafb",
-                borderRadius: "12px",
-                border: "1px solid #e5e7eb",
-              }}
-            >
-              <h3
+            {/* ══ NAME ══ */}
+            <div style={{ marginBottom: "24px" }}>
+              <label
                 style={{
-                  fontSize: "18px",
-                  fontWeight: "600",
-                  color: "#111827",
-                  marginBottom: "20px",
+                  display: "block",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  marginBottom: "8px",
+                  color: "#374151",
                 }}
               >
-                Basic Information
-              </h3>
-              <div style={{ display: "grid", gap: "20px" }}>
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "14px",
-                      fontWeight: "500",
-                      marginBottom: "8px",
-                      color: "#374151",
-                    }}
-                  >
-                    Product Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    required
-                    disabled={saving}
-                    placeholder="e.g., Samsung Galaxy S24"
-                    style={{
-                      width: "100%",
-                      padding: "12px 14px",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      outline: "none",
-                    }}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = "#667eea";
-                      e.target.style.boxShadow =
-                        "0 0 0 3px rgba(102,126,234,0.1)";
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = "#d1d5db";
-                      e.target.style.boxShadow = "none";
-                    }}
-                  />
-                </div>
+                Product Name*
+              </label>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                required
+                disabled={saving}
+                style={inp}
+                onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+              />
+            </div>
 
-                <div
+            {/* ══ SLUG + PRODUCT KEY ══ */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <div>
+                <label
                   style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "16px",
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
                   }}
                 >
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        marginBottom: "8px",
-                        color: "#374151",
-                      }}
-                    >
-                      Product Key *
-                    </label>
-                    <input
-                      type="text"
-                      name="productKey"
-                      value={formData.productKey}
-                      onChange={handleInputChange}
-                      required
-                      disabled={saving}
-                      placeholder="e.g., SGS-2026"
-                      style={{
-                        width: "100%",
-                        padding: "12px 14px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                      }}
-                      onFocus={(e) => {
-                        e.target.style.borderColor = "#667eea";
-                        e.target.style.boxShadow =
-                          "0 0 0 3px rgba(102,126,234,0.1)";
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = "#d1d5db";
-                        e.target.style.boxShadow = "none";
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        marginBottom: "8px",
-                        color: "#374151",
-                      }}
-                    >
-                      URL Slug *
-                    </label>
-                    <input
-                      type="text"
-                      name="slug"
-                      value={formData.slug}
-                      onChange={handleInputChange}
-                      required
-                      disabled={saving}
-                      placeholder="samsung-galaxy-s24"
-                      style={{
-                        width: "100%",
-                        padding: "12px 14px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                        backgroundColor: "#f9fafb",
-                      }}
-                      onFocus={(e) => {
-                        e.target.style.borderColor = "#667eea";
-                        e.target.style.boxShadow =
-                          "0 0 0 3px rgba(102,126,234,0.1)";
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = "#d1d5db";
-                        e.target.style.boxShadow = "none";
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div
+                  URL Slug*
+                </label>
+                <input
+                  type="text"
+                  name="slug"
+                  value={formData.slug}
+                  onChange={handleInputChange}
+                  required
+                  disabled={saving}
+                  style={inp}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+              <div>
+                <label
                   style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr 1fr",
-                    gap: "16px",
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
                   }}
                 >
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        marginBottom: "8px",
-                        color: "#374151",
-                      }}
-                    >
-                      Brand
-                    </label>
-                    <input
-                      type="text"
-                      name="brand"
-                      value={formData.brand}
-                      onChange={handleInputChange}
-                      disabled={saving}
-                      placeholder="e.g., Samsung"
-                      style={{
-                        width: "100%",
-                        padding: "12px 14px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                      }}
-                      onFocus={(e) => {
-                        e.target.style.borderColor = "#667eea";
-                        e.target.style.boxShadow =
-                          "0 0 0 3px rgba(102,126,234,0.1)";
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = "#d1d5db";
-                        e.target.style.boxShadow = "none";
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        marginBottom: "8px",
-                        color: "#374151",
-                      }}
-                    >
-                      Category *
-                    </label>
-                    <select
-                      name="category"
-                      value={formData.category}
-                      onChange={handleInputChange}
-                      required
-                      style={{
-                        width: "100%",
-                        padding: "12px 14px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                        backgroundColor: "white",
-                      }}
-                      onFocus={(e) => {
-                        e.target.style.borderColor = "#667eea";
-                        e.target.style.boxShadow =
-                          "0 0 0 3px rgba(102,126,234,0.1)";
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = "#d1d5db";
-                        e.target.style.boxShadow = "none";
-                      }}
-                    >
-                      <option value="">Select Category</option>
-                      {categories.map((cat) => (
-                        <option key={cat._id} value={cat._id}>
-                          {cat.pageTitle || cat.title || cat.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        marginBottom: "8px",
-                        color: "#374151",
-                      }}
-                    >
-                      Model Number
-                    </label>
-                    <input
-                      type="text"
-                      name="modelNumber"
-                      value={formData.modelNumber}
-                      onChange={handleInputChange}
-                      placeholder="e.g., S24-128GB"
-                      style={{
-                        width: "100%",
-                        padding: "12px 14px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                      }}
-                      onFocus={(e) => {
-                        e.target.style.borderColor = "#667eea";
-                        e.target.style.boxShadow =
-                          "0 0 0 3px rgba(102,126,234,0.1)";
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = "#d1d5db";
-                        e.target.style.boxShadow = "none";
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "14px",
-                      fontWeight: "500",
-                      marginBottom: "8px",
-                      color: "#374151",
-                    }}
-                  >
-                    Description *
-                  </label>
-                  <textarea
-                    name="description"
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    required
-                    rows="5"
-                    placeholder="Enter detailed product description..."
-                    style={{
-                      width: "100%",
-                      padding: "12px 14px",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      outline: "none",
-                      resize: "vertical",
-                      fontFamily: "inherit",
-                    }}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = "#667eea";
-                      e.target.style.boxShadow =
-                        "0 0 0 3px rgba(102,126,234,0.1)";
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = "#d1d5db";
-                      e.target.style.boxShadow = "none";
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "14px",
-                      fontWeight: "500",
-                      marginBottom: "8px",
-                      color: "#374151",
-                    }}
-                  >
-                    Status
-                  </label>
-                  <select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleInputChange}
-                    style={{
-                      width: "100%",
-                      padding: "12px 14px",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      outline: "none",
-                      backgroundColor: "white",
-                    }}
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </div>
+                  Product Key*
+                </label>
+                <input
+                  type="text"
+                  name="productKey"
+                  value={formData.productKey}
+                  onChange={handleInputChange}
+                  required
+                  disabled={saving}
+                  style={inp}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
               </div>
             </div>
 
-            {/* ===== SPECIFICATIONS ===== */}
+            {/* ══ BRAND + CATEGORY ══ */}
             <div
               style={{
-                marginBottom: "40px",
-                padding: "24px",
-                backgroundColor: "#f9fafb",
-                borderRadius: "12px",
-                border: "1px solid #e5e7eb",
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "16px",
+                marginBottom: "24px",
               }}
             >
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Brand (Optional)
+                </label>
+                <input
+                  type="text"
+                  name="brand"
+                  value={formData.brand}
+                  onChange={handleInputChange}
+                  disabled={saving}
+                  style={inp}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Category*
+                </label>
+                <select
+                  name="category"
+                  value={formData.category}
+                  onChange={handleInputChange}
+                  required
+                  style={{ ...inp, backgroundColor: "white" }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                >
+                  <option value="">Select a category</option>
+                  {categories.map((cat) => (
+                    <option key={cat._id} value={cat._id}>
+                      {cat.pageTitle || cat.title || cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Subcategory
+                </label>
+                <select
+                  name="subcategory"
+                  value={formData.subcategory}
+                  onChange={handleInputChange}
+                  disabled={subcategories.length === 0 || saving}
+                  style={{ ...inp, backgroundColor: "white" }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                >
+                  <option value="">Select a subcategory</option>
+                  {subcategories.map((sc) => (
+                    <option key={sc._id} value={sc._id}>
+                      {sc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Status
+                </label>
+                <select
+                  name="status"
+                  value={formData.status}
+                  onChange={handleInputChange}
+                  style={{ ...inp, backgroundColor: "white" }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+
+            {/* ══ FILTER OPTIONS ══ */}
+            {filterGroups.length > 0 && (
+              <div style={{ marginBottom: "24px" }}>
+                <h4
+                  style={{
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    marginBottom: "8px",
+                  }}
+                >
+                  Filter Options
+                </h4>
+                {filterGroups.map((group) => (
+                  <div key={group._id} style={{ marginBottom: "12px" }}>
+                    <div
+                      style={{
+                        fontWeight: 500,
+                        marginBottom: "4px",
+                        fontSize: "14px",
+                      }}
+                    >
+                      {group.name}
+                    </div>
+                    <div
+                      style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}
+                    >
+                      {group.options.map((opt) => (
+                        <label
+                          key={opt._id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            fontSize: "13px",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formData.filterOptions.includes(opt._id)}
+                            onChange={(e) => {
+                              const selected = formData.filterOptions || [];
+                              setFormData((prev) => ({
+                                ...prev,
+                                filterOptions: e.target.checked
+                                  ? [...selected, opt._id]
+                                  : selected.filter((id) => id !== opt._id),
+                              }));
+                            }}
+                          />
+                          {opt.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ══ DESCRIPTION ══ */}
+            <div style={{ marginBottom: "24px" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  marginBottom: "8px",
+                  color: "#374151",
+                }}
+              >
+                Description*
+              </label>
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={handleInputChange}
+                required
+                rows="6"
+                placeholder="Enter detailed product description..."
+                style={{ ...inp, resize: "vertical", fontFamily: "inherit" }}
+                onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+              />
+            </div>
+
+            {/* ══ WARRANTY + RETURN POLICY ══ */}
+            <div style={{ marginBottom: "24px" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  marginBottom: "8px",
+                  color: "#374151",
+                }}
+              >
+                Warranty*
+              </label>
+              <textarea
+                name="warranty"
+                value={formData.warranty}
+                onChange={handleInputChange}
+                required
+                rows="3"
+                placeholder="e.g., 1 year manufacturer warranty"
+                style={{
+                  ...inp,
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                  marginBottom: "16px",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+              />
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  marginBottom: "8px",
+                  color: "#374151",
+                }}
+              >
+                Return Policy*
+              </label>
+              <textarea
+                name="returnPolicy"
+                value={formData.returnPolicy}
+                onChange={handleInputChange}
+                required
+                rows="3"
+                placeholder="e.g., 30 days return policy"
+                style={{ ...inp, resize: "vertical", fontFamily: "inherit" }}
+                onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+              />
+            </div>
+
+            {/* ══ SPECIFICATIONS ══ */}
+            <div style={{ marginBottom: "24px" }}>
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  marginBottom: "20px",
+                  marginBottom: "12px",
                 }}
               >
-                <h3
+                <label
                   style={{
-                    fontSize: "18px",
-                    fontWeight: "600",
-                    color: "#111827",
-                    margin: 0,
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    color: "#374151",
                   }}
                 >
-                  Technical Specifications
-                </h3>
+                  Specifications
+                </label>
                 <button
                   type="button"
                   onClick={addSpecification}
                   style={{
-                    padding: "10px 18px",
-                    backgroundColor: "#667eea",
+                    padding: "6px 12px",
+                    backgroundColor: "#10b981",
                     color: "white",
                     border: "none",
-                    borderRadius: "8px",
-                    fontSize: "14px",
+                    borderRadius: "6px",
+                    fontSize: "13px",
                     cursor: "pointer",
-                    fontWeight: "600",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
+                    fontWeight: "500",
                   }}
                 >
-                  <MdAdd size={18} /> Add Specification
+                  + Add
                 </button>
               </div>
-              {formData.specifications.length === 0 ? (
+              {formData.specifications.map((spec, index) => (
                 <div
-                  style={{
-                    padding: "32px",
-                    textAlign: "center",
-                    border: "2px dashed #d1d5db",
-                    borderRadius: "8px",
-                    backgroundColor: "#fafafa",
-                  }}
+                  key={index}
+                  style={{ display: "flex", gap: "12px", marginBottom: "12px" }}
                 >
-                  <p style={{ color: "#6b7280", margin: 0, fontSize: "14px" }}>
-                    No specifications added yet. Click "Add Specification" to
-                    start.
-                  </p>
-                </div>
-              ) : (
-                formData.specifications.map((spec, index) => (
-                  <div
-                    key={index}
+                  <input
+                    type="text"
+                    value={spec.key}
+                    onChange={(e) =>
+                      handleSpecificationChange(index, "key", e.target.value)
+                    }
+                    placeholder="Key (e.g., Processor)"
                     style={{
-                      display: "flex",
-                      gap: "12px",
-                      marginBottom: "12px",
+                      flex: 1,
+                      padding: "10px 12px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      outline: "none",
+                    }}
+                  />
+                  <input
+                    type="text"
+                    value={spec.value}
+                    onChange={(e) =>
+                      handleSpecificationChange(index, "value", e.target.value)
+                    }
+                    placeholder="Value (e.g., Intel i7)"
+                    style={{
+                      flex: 1,
+                      padding: "10px 12px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      outline: "none",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeSpecification(index)}
+                    style={{
+                      padding: "10px 16px",
+                      backgroundColor: "#ef4444",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      fontSize: "13px",
+                      cursor: "pointer",
                     }}
                   >
-                    <input
-                      type="text"
-                      value={spec.key}
-                      onChange={(e) =>
-                        handleSpecificationChange(index, "key", e.target.value)
-                      }
-                      placeholder="Key (e.g., Display)"
-                      style={{
-                        flex: 1,
-                        padding: "12px 14px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                        backgroundColor: "white",
-                      }}
-                    />
-                    <input
-                      type="text"
-                      value={spec.value}
-                      onChange={(e) =>
-                        handleSpecificationChange(
-                          index,
-                          "value",
-                          e.target.value,
-                        )
-                      }
-                      placeholder="Value (e.g., 6.2 inch AMOLED)"
-                      style={{
-                        flex: 1,
-                        padding: "12px 14px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                        backgroundColor: "white",
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeSpecification(index)}
-                      style={{
-                        padding: "12px 18px",
-                        backgroundColor: "#ef4444",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        cursor: "pointer",
-                        fontWeight: "600",
-                      }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))
-              )}
+                    Remove
+                  </button>
+                </div>
+              ))}
             </div>
 
-            {/* ===== KEY FEATURES ===== */}
-            <div
-              style={{
-                marginBottom: "40px",
-                padding: "24px",
-                backgroundColor: "#f9fafb",
-                borderRadius: "12px",
-                border: "1px solid #e5e7eb",
-              }}
-            >
+            {/* ══ KEY FEATURES ══ */}
+            <div style={{ marginBottom: "32px" }}>
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  marginBottom: "20px",
+                  marginBottom: "12px",
                 }}
               >
-                <h3
+                <label
                   style={{
-                    fontSize: "18px",
-                    fontWeight: "600",
-                    color: "#111827",
-                    margin: 0,
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    color: "#374151",
                   }}
                 >
-                  Key Features
-                </h3>
+                  Key Features (Optional)
+                </label>
                 <button
                   type="button"
                   onClick={addKeyFeature}
                   style={{
-                    padding: "10px 18px",
-                    backgroundColor: "#667eea",
+                    padding: "6px 12px",
+                    backgroundColor: "#10b981",
                     color: "white",
                     border: "none",
-                    borderRadius: "8px",
-                    fontSize: "14px",
+                    borderRadius: "6px",
+                    fontSize: "13px",
                     cursor: "pointer",
-                    fontWeight: "600",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
+                    fontWeight: "500",
                   }}
                 >
-                  <MdAdd size={18} /> Add Feature
+                  + Add
                 </button>
               </div>
-              {formData.keyFeatures.length === 0 ? (
+              {formData.keyFeatures.map((feature, index) => (
                 <div
+                  key={index}
+                  style={{ display: "flex", gap: "12px", marginBottom: "12px" }}
+                >
+                  <input
+                    type="text"
+                    value={feature.key}
+                    onChange={(e) =>
+                      handleKeyFeatureChange(index, "key", e.target.value)
+                    }
+                    placeholder="Feature name"
+                    style={{
+                      flex: 1,
+                      padding: "10px 12px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      outline: "none",
+                    }}
+                  />
+                  <input
+                    type="text"
+                    value={feature.value}
+                    onChange={(e) =>
+                      handleKeyFeatureChange(index, "value", e.target.value)
+                    }
+                    placeholder="Feature description"
+                    style={{
+                      flex: 1,
+                      padding: "10px 12px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      outline: "none",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeKeyFeature(index)}
+                    style={{
+                      padding: "10px 16px",
+                      backgroundColor: "#ef4444",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      fontSize: "13px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* ══ TAGS + KEYWORDS ══ */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <div>
+                <label
                   style={{
-                    padding: "32px",
-                    textAlign: "center",
-                    border: "2px dashed #d1d5db",
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Tags (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={formData.tags.join(", ")}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      tags: e.target.value
+                        .split(",")
+                        .map((t) => t.trim())
+                        .filter(Boolean),
+                    }))
+                  }
+                  placeholder="electronics, smartphone"
+                  style={inp}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  SEO Keywords (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={formData.keywords.join(", ")}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      keywords: e.target.value
+                        .split(",")
+                        .map((k) => k.trim())
+                        .filter(Boolean),
+                    }))
+                  }
+                  placeholder="keyword1, keyword2"
+                  style={inp}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+            </div>
+
+            {/* ══ META TITLE + META DESCRIPTION ══ */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Meta Title
+                </label>
+                <input
+                  type="text"
+                  name="metaTitle"
+                  value={formData.metaTitle}
+                  onChange={handleInputChange}
+                  placeholder="SEO meta title"
+                  style={inp}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                    color: "#374151",
+                  }}
+                >
+                  Meta Description
+                </label>
+                <input
+                  type="text"
+                  name="metaDescription"
+                  value={formData.metaDescription}
+                  onChange={handleInputChange}
+                  placeholder="SEO meta description"
+                  style={inp}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+            </div>
+
+            {/* ══ VARIANTS ══ */}
+            <div style={{ marginBottom: "32px" }}>
+              <h3
+                style={{
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  marginBottom: "16px",
+                  color: "#111827",
+                }}
+              >
+                Variants
+              </h3>
+              {formData.variants.map((variant, index) => (
+                <div
+                  key={index}
+                  style={{
+                    padding: "20px",
+                    border: "1px solid #e5e7eb",
                     borderRadius: "8px",
+                    marginBottom: "16px",
                     backgroundColor: "#fafafa",
                   }}
                 >
-                  <p style={{ color: "#6b7280", margin: 0, fontSize: "14px" }}>
-                    No key features added yet. Click "Add Feature" to start.
-                  </p>
-                </div>
-              ) : (
-                formData.keyFeatures.map((feature, index) => (
+                  {/* Variant Header */}
                   <div
-                    key={index}
                     style={{
                       display: "flex",
-                      gap: "12px",
-                      marginBottom: "12px",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "16px",
                     }}
                   >
-                    <input
-                      type="text"
-                      value={feature.key}
-                      onChange={(e) =>
-                        handleKeyFeatureChange(index, "key", e.target.value)
-                      }
-                      placeholder="Feature name (e.g., Camera)"
+                    <h4
                       style={{
-                        flex: 1,
-                        padding: "12px 14px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
                         fontSize: "14px",
-                        outline: "none",
-                        backgroundColor: "white",
+                        fontWeight: "600",
+                        color: "#111827",
+                        margin: 0,
                       }}
-                    />
-                    <input
-                      type="text"
-                      value={feature.value}
-                      onChange={(e) =>
-                        handleKeyFeatureChange(index, "value", e.target.value)
-                      }
-                      placeholder="Feature description (e.g., 50MP Triple Camera)"
-                      style={{
-                        flex: 1,
-                        padding: "12px 14px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                        backgroundColor: "white",
-                      }}
-                    />
+                    >
+                      Variant {index + 1}
+                      {variant.attributes?.color &&
+                        ` — ${variant.attributes.color}`}
+                      {variant.attributes?.size &&
+                        ` / ${variant.attributes.size}`}
+                    </h4>
                     <button
                       type="button"
-                      onClick={() => removeKeyFeature(index)}
+                      onClick={() => removeVariant(index)}
                       style={{
-                        padding: "12px 18px",
+                        padding: "6px 12px",
                         backgroundColor: "#ef4444",
                         color: "white",
                         border: "none",
-                        borderRadius: "8px",
-                        fontSize: "14px",
+                        borderRadius: "6px",
+                        fontSize: "13px",
                         cursor: "pointer",
-                        fontWeight: "600",
                       }}
                     >
                       Remove
                     </button>
                   </div>
-                ))
-              )}
-            </div>
 
-            {/* ===== PRODUCT VARIANTS ===== */}
-            <div
-              style={{
-                marginBottom: "40px",
-                padding: "24px",
-                backgroundColor: "#f9fafb",
-                borderRadius: "12px",
-                border: "1px solid #e5e7eb",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "20px",
-                }}
-              >
-                <h3
-                  style={{
-                    fontSize: "18px",
-                    fontWeight: "600",
-                    color: "#111827",
-                    margin: 0,
-                  }}
-                >
-                  Product Variants
-                  {formData.variants.length > 0 && (
-                    <span
-                      style={{
-                        marginLeft: "8px",
-                        fontSize: "14px",
-                        color: "#667eea",
-                        fontWeight: "500",
-                      }}
-                    >
-                      ({formData.variants.length})
-                    </span>
-                  )}
-                </h3>
-                <button
-                  type="button"
-                  onClick={addVariant}
-                  style={{
-                    padding: "10px 18px",
-                    backgroundColor: "#667eea",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                  }}
-                >
-                  <MdAdd size={18} /> Add Variant
-                </button>
-              </div>
-
-              {formData.variants.length === 0 ? (
-                <div
-                  style={{
-                    padding: "32px",
-                    textAlign: "center",
-                    border: "2px dashed #d1d5db",
-                    borderRadius: "8px",
-                    backgroundColor: "#fafafa",
-                  }}
-                >
-                  <p style={{ color: "#6b7280", margin: 0, fontSize: "14px" }}>
-                    No variants added. Click "Add Variant" to create product
-                    variations.
-                  </p>
-                </div>
-              ) : (
-                formData.variants.map((variant, variantIndex) => (
+                  {/* Attributes */}
                   <div
-                    key={variantIndex}
                     style={{
-                      padding: "24px",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "12px",
-                      marginBottom: "20px",
-                      backgroundColor: "white",
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr 1fr",
+                      gap: "12px",
                     }}
                   >
+                    {["color", "size", "model"].map((attr) => (
+                      <div key={attr}>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "13px",
+                            fontWeight: "500",
+                            marginBottom: "6px",
+                            color: "#374151",
+                            textTransform: "capitalize",
+                          }}
+                        >
+                          {attr}
+                        </label>
+                        <input
+                          type="text"
+                          value={variant.attributes?.[attr] || ""}
+                          onChange={(e) =>
+                            handleVariantChange(
+                              index,
+                              `attributes.${attr}`,
+                              e.target.value,
+                            )
+                          }
+                          placeholder={
+                            attr === "color"
+                              ? "e.g. Red"
+                              : attr === "size"
+                                ? "e.g. M"
+                                : "e.g. Pro"
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            outline: "none",
+                            boxSizing: "border-box",
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Pricing */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr 1fr",
+                      gap: "12px",
+                      marginTop: "12px",
+                    }}
+                  >
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "13px",
+                          fontWeight: "500",
+                          marginBottom: "6px",
+                          color: "#374151",
+                        }}
+                      >
+                        SKU*
+                      </label>
+                      <input
+                        type="text"
+                        value={variant.sku}
+                        onChange={(e) =>
+                          handleVariantChange(index, "sku", e.target.value)
+                        }
+                        placeholder="Variant SKU"
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "6px",
+                          fontSize: "14px",
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "13px",
+                          fontWeight: "500",
+                          marginBottom: "6px",
+                          color: "#374151",
+                        }}
+                      >
+                        Price*
+                      </label>
+                      <input
+                        type="number"
+                        value={variant.price}
+                        onChange={(e) =>
+                          handleVariantChange(index, "price", e.target.value)
+                        }
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "6px",
+                          fontSize: "14px",
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "13px",
+                          fontWeight: "500",
+                          marginBottom: "6px",
+                          color: "#374151",
+                        }}
+                      >
+                        MRP
+                      </label>
+                      <input
+                        type="number"
+                        value={variant.mrp || ""}
+                        onChange={(e) =>
+                          handleVariantChange(index, "mrp", e.target.value)
+                        }
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "6px",
+                          fontSize: "14px",
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "13px",
+                          fontWeight: "500",
+                          marginBottom: "6px",
+                          color: "#374151",
+                        }}
+                      >
+                        Stock Quantity
+                      </label>
+                      <input
+                        type="number"
+                        value={variant.stockQuantity ?? 0}
+                        onChange={(e) =>
+                          handleVariantChange(
+                            index,
+                            "stockQuantity",
+                            Number(e.target.value),
+                          )
+                        }
+                        min="0"
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "6px",
+                          fontSize: "14px",
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "13px",
+                          fontWeight: "500",
+                          marginBottom: "6px",
+                          color: "#374151",
+                        }}
+                      >
+                        Currency
+                      </label>
+                      <select
+                        value={variant.currency || "INR"}
+                        onChange={(e) =>
+                          handleVariantChange(index, "currency", e.target.value)
+                        }
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "6px",
+                          fontSize: "14px",
+                          outline: "none",
+                          backgroundColor: "white",
+                          boxSizing: "border-box",
+                        }}
+                      >
+                        <option value="INR">INR</option>
+                        <option value="USD">USD</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Dimensions */}
+                  <div style={{ marginTop: "16px" }}>
+                    <h5
+                      style={{
+                        marginBottom: "8px",
+                        fontSize: "13px",
+                        fontWeight: "600",
+                        color: "#374151",
+                      }}
+                    >
+                      Dimensions
+                    </h5>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr 1fr 1fr",
+                        gap: "12px",
+                      }}
+                    >
+                      {["weight", "length", "width", "height"].map((dim) => (
+                        <input
+                          key={dim}
+                          type="number"
+                          placeholder={
+                            dim.charAt(0).toUpperCase() + dim.slice(1)
+                          }
+                          value={variant.dimensions?.[dim] || ""}
+                          onChange={(e) =>
+                            handleVariantChange(
+                              index,
+                              `dimensions.${dim}`,
+                              Number(e.target.value),
+                            )
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            outline: "none",
+                            boxSizing: "border-box",
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Variant Specifications */}
+                  <div style={{ marginTop: "16px" }}>
                     <div
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        marginBottom: "20px",
-                        paddingBottom: "12px",
-                        borderBottom: "2px solid #f3f4f6",
+                        marginBottom: "8px",
                       }}
                     >
-                      <h4
+                      <h5
                         style={{
-                          fontSize: "16px",
-                          fontWeight: "600",
-                          color: "#111827",
                           margin: 0,
+                          fontSize: "13px",
+                          fontWeight: "600",
+                          color: "#374151",
                         }}
                       >
-                        Variant #{variantIndex + 1}
-                      </h4>
+                        Specifications
+                      </h5>
                       <button
                         type="button"
-                        onClick={() => removeVariant(variantIndex)}
+                        onClick={() => addVariantSpecification(index)}
                         style={{
-                          padding: "8px 16px",
-                          backgroundColor: "#ef4444",
+                          padding: "4px 10px",
+                          backgroundColor: "#10b981",
                           color: "white",
                           border: "none",
                           borderRadius: "6px",
-                          fontSize: "13px",
+                          fontSize: "12px",
                           cursor: "pointer",
-                          fontWeight: "600",
                         }}
                       >
-                        Remove Variant
+                        + Add
                       </button>
                     </div>
-
-                    {/* Attributes */}
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr 1fr",
-                        gap: "16px",
-                        marginBottom: "16px",
-                      }}
-                    >
-                      {[
-                        ["Color", "attributes.color", "Black, Blue, Red"],
-                        [
-                          "Size/Storage",
-                          "attributes.size",
-                          "128GB, 256GB, S, M, L",
-                        ],
-                        ["Model", "attributes.model", "S24, Pro, Basic"],
-                      ].map(([label, field, placeholder]) => (
-                        <div key={field}>
-                          <label
-                            style={{
-                              display: "block",
-                              fontSize: "13px",
-                              fontWeight: "500",
-                              marginBottom: "6px",
-                              color: "#374151",
-                            }}
-                          >
-                            {label}
-                          </label>
-                          <input
-                            type="text"
-                            value={
-                              field === "attributes.color"
-                                ? variant.attributes?.color || ""
-                                : field === "attributes.size"
-                                  ? variant.attributes?.size || ""
-                                  : variant.attributes?.model || ""
-                            }
-                            onChange={(e) =>
-                              handleVariantChange(
-                                variantIndex,
-                                field,
-                                e.target.value,
-                              )
-                            }
-                            placeholder={placeholder}
-                            style={{
-                              width: "100%",
-                              padding: "10px 12px",
-                              border: "1px solid #d1d5db",
-                              borderRadius: "6px",
-                              fontSize: "14px",
-                              outline: "none",
-                            }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* SKU, Pricing, Stock */}
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr 1fr 1fr",
-                        gap: "16px",
-                        marginBottom: "16px",
-                      }}
-                    >
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: "500",
-                            marginBottom: "6px",
-                            color: "#374151",
-                          }}
-                        >
-                          SKU
-                        </label>
-                        <input
-                          type="text"
-                          value={variant.sku}
-                          onChange={(e) =>
-                            handleVariantChange(
-                              variantIndex,
-                              "sku",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="SGS24-230-BLACK"
-                          style={{
-                            width: "100%",
-                            padding: "10px 12px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "6px",
-                            fontSize: "14px",
-                            outline: "none",
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: "500",
-                            marginBottom: "6px",
-                            color: "#374151",
-                          }}
-                        >
-                          MRP (₹)
-                        </label>
-                        <input
-                          type="number"
-                          value={variant.mrp}
-                          onChange={(e) =>
-                            handleVariantChange(
-                              variantIndex,
-                              "mrp",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="79999"
-                          step="0.01"
-                          style={{
-                            width: "100%",
-                            padding: "10px 12px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "6px",
-                            fontSize: "14px",
-                            outline: "none",
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: "500",
-                            marginBottom: "6px",
-                            color: "#374151",
-                          }}
-                        >
-                          Selling Price (₹) *
-                        </label>
-                        <input
-                          type="number"
-                          value={variant.price}
-                          onChange={(e) =>
-                            handleVariantChange(
-                              variantIndex,
-                              "price",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="74999"
-                          step="0.01"
-                          style={{
-                            width: "100%",
-                            padding: "10px 12px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "6px",
-                            fontSize: "14px",
-                            outline: "none",
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            fontWeight: "500",
-                            marginBottom: "6px",
-                            color: "#374151",
-                          }}
-                        >
-                          Stock Qty
-                        </label>
-                        <input
-                          type="number"
-                          value={variant.stockQuantity}
-                          onChange={(e) =>
-                            handleVariantChange(
-                              variantIndex,
-                              "stockQuantity",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="0"
-                          style={{
-                            width: "100%",
-                            padding: "10px 12px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "6px",
-                            fontSize: "14px",
-                            outline: "none",
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Dimensions */}
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr 1fr 1fr",
-                        gap: "16px",
-                        marginBottom: "16px",
-                      }}
-                    >
-                      {[
-                        ["Weight (g)", "dimensions.weight", "168"],
-                        ["Length (cm)", "dimensions.length", "14.7"],
-                        ["Width (cm)", "dimensions.width", "7.0"],
-                        ["Height (cm)", "dimensions.height", "0.76"],
-                      ].map(([label, field, placeholder]) => (
-                        <div key={field}>
-                          <label
-                            style={{
-                              display: "block",
-                              fontSize: "13px",
-                              fontWeight: "500",
-                              marginBottom: "6px",
-                              color: "#374151",
-                            }}
-                          >
-                            {label}
-                          </label>
-                          <input
-                            type="number"
-                            value={
-                              field === "dimensions.weight"
-                                ? variant.dimensions?.weight || ""
-                                : field === "dimensions.length"
-                                  ? variant.dimensions?.length || ""
-                                  : field === "dimensions.width"
-                                    ? variant.dimensions?.width || ""
-                                    : variant.dimensions?.height || ""
-                            }
-                            onChange={(e) =>
-                              handleVariantChange(
-                                variantIndex,
-                                field,
-                                e.target.value,
-                              )
-                            }
-                            placeholder={placeholder}
-                            step="0.01"
-                            style={{
-                              width: "100%",
-                              padding: "10px 12px",
-                              border: "1px solid #d1d5db",
-                              borderRadius: "6px",
-                              fontSize: "14px",
-                              outline: "none",
-                            }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Variant Specifications */}
-                    <div style={{ marginTop: "16px" }}>
+                    {(variant.specifications || []).map((spec, si) => (
                       <div
+                        key={si}
                         style={{
                           display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          marginBottom: "12px",
+                          gap: "8px",
+                          marginBottom: "8px",
                         }}
                       >
-                        <label
+                        <input
+                          type="text"
+                          placeholder="Key"
+                          value={spec.key}
+                          onChange={(e) =>
+                            handleVariantSpecificationChange(
+                              index,
+                              si,
+                              "key",
+                              e.target.value,
+                            )
+                          }
                           style={{
-                            fontSize: "14px",
-                            fontWeight: "500",
-                            color: "#374151",
+                            flex: 1,
+                            padding: "7px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "13px",
+                            outline: "none",
                           }}
-                        >
-                          Variant-Specific Specifications
-                        </label>
+                        />
+                        <input
+                          type="text"
+                          placeholder="Value"
+                          value={spec.value}
+                          onChange={(e) =>
+                            handleVariantSpecificationChange(
+                              index,
+                              si,
+                              "value",
+                              e.target.value,
+                            )
+                          }
+                          style={{
+                            flex: 1,
+                            padding: "7px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "13px",
+                            outline: "none",
+                          }}
+                        />
                         <button
                           type="button"
-                          onClick={() => addVariantSpecification(variantIndex)}
+                          onClick={() => removeVariantSpecification(index, si)}
                           style={{
-                            padding: "6px 12px",
-                            backgroundColor: "#667eea",
+                            padding: "7px 12px",
+                            backgroundColor: "#ef4444",
                             color: "white",
                             border: "none",
                             borderRadius: "6px",
                             fontSize: "12px",
                             cursor: "pointer",
-                            fontWeight: "500",
                           }}
                         >
-                          + Add Spec
+                          ✕
                         </button>
                       </div>
-                      {variant.specifications?.map((spec, specIndex) => (
-                        <div
-                          key={specIndex}
+                    ))}
+                  </div>
+
+                  {/* Variant Key Features */}
+                  <div style={{ marginTop: "16px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      <h5
+                        style={{
+                          margin: 0,
+                          fontSize: "13px",
+                          fontWeight: "600",
+                          color: "#374151",
+                        }}
+                      >
+                        Key Features
+                      </h5>
+                      <button
+                        type="button"
+                        onClick={() => addVariantKeyFeature(index)}
+                        style={{
+                          padding: "4px 10px",
+                          backgroundColor: "#10b981",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          fontSize: "12px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        + Add
+                      </button>
+                    </div>
+                    {(variant.keyFeatures || []).map((feature, fi) => (
+                      <div
+                        key={fi}
+                        style={{
+                          display: "flex",
+                          gap: "8px",
+                          marginBottom: "8px",
+                        }}
+                      >
+                        <input
+                          type="text"
+                          placeholder="Feature"
+                          value={feature.key}
+                          onChange={(e) =>
+                            handleVariantKeyFeatureChange(
+                              index,
+                              fi,
+                              "key",
+                              e.target.value,
+                            )
+                          }
                           style={{
-                            display: "flex",
-                            gap: "10px",
-                            marginBottom: "10px",
+                            flex: 1,
+                            padding: "7px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "13px",
+                            outline: "none",
+                          }}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Value"
+                          value={feature.value}
+                          onChange={(e) =>
+                            handleVariantKeyFeatureChange(
+                              index,
+                              fi,
+                              "value",
+                              e.target.value,
+                            )
+                          }
+                          style={{
+                            flex: 1,
+                            padding: "7px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            fontSize: "13px",
+                            outline: "none",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeVariantKeyFeature(index, fi)}
+                          style={{
+                            padding: "7px 12px",
+                            backgroundColor: "#ef4444",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            cursor: "pointer",
                           }}
                         >
-                          <input
-                            type="text"
-                            value={spec.key}
-                            onChange={(e) =>
-                              handleVariantSpecChange(
-                                variantIndex,
-                                specIndex,
-                                "key",
-                                e.target.value,
-                              )
-                            }
-                            placeholder="Key (e.g., RAM)"
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* ✅ Variant Images */}
+                  <div style={{ marginTop: "16px" }}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "13px",
+                        fontWeight: "600",
+                        marginBottom: "8px",
+                        color: "#374151",
+                      }}
+                    >
+                      Variant Images (max 3)
+                      {variant.attributes?.color && (
+                        <span
+                          style={{
+                            marginLeft: "8px",
+                            fontSize: "12px",
+                            color: "#6b7280",
+                            fontWeight: "400",
+                          }}
+                        >
+                          — "{variant.attributes.color}" variant ke liye
+                        </span>
+                      )}
+                    </label>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "8px",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                      }}
+                    >
+                      {(variant.images || []).map((img) => (
+                        <div
+                          key={img.id || img.public_id || img.url}
+                          style={{ position: "relative" }}
+                        >
+                          <img
+                            src={img.preview || img.url}
+                            alt="variant"
                             style={{
-                              flex: 1,
-                              padding: "8px 10px",
-                              border: "1px solid #d1d5db",
+                              width: "80px",
+                              height: "80px",
+                              objectFit: "cover",
                               borderRadius: "6px",
-                              fontSize: "13px",
-                              outline: "none",
-                            }}
-                          />
-                          <input
-                            type="text"
-                            value={spec.value}
-                            onChange={(e) =>
-                              handleVariantSpecChange(
-                                variantIndex,
-                                specIndex,
-                                "value",
-                                e.target.value,
-                              )
-                            }
-                            placeholder="Value (e.g., 8GB)"
-                            style={{
-                              flex: 1,
-                              padding: "8px 10px",
-                              border: "1px solid #d1d5db",
-                              borderRadius: "6px",
-                              fontSize: "13px",
-                              outline: "none",
+                              border: "1px solid #e5e7eb",
                             }}
                           />
                           <button
                             type="button"
                             onClick={() =>
-                              removeVariantSpecification(
-                                variantIndex,
-                                specIndex,
-                              )
+                              removeVariantImage(index, img.id, img.public_id)
                             }
                             style={{
-                              padding: "8px 14px",
+                              position: "absolute",
+                              top: "-6px",
+                              right: "-6px",
                               backgroundColor: "#ef4444",
-                              color: "white",
                               border: "none",
-                              borderRadius: "6px",
-                              fontSize: "12px",
+                              borderRadius: "50%",
+                              color: "white",
+                              width: "20px",
+                              height: "20px",
                               cursor: "pointer",
+                              fontSize: "12px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
                             }}
                           >
-                            Remove
+                            ×
                           </button>
                         </div>
                       ))}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* ===== NON-VARIANT PRICING (only if no variants) ===== */}
-            {formData.variants.length === 0 && (
-              <>
-                <div
-                  style={{
-                    marginBottom: "40px",
-                    padding: "24px",
-                    backgroundColor: "#f9fafb",
-                    borderRadius: "12px",
-                    border: "1px solid #e5e7eb",
-                  }}
-                >
-                  <h3
-                    style={{
-                      fontSize: "18px",
-                      fontWeight: "600",
-                      color: "#111827",
-                      marginBottom: "20px",
-                    }}
-                  >
-                    Pricing & Inventory
-                  </h3>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr 1fr 1fr",
-                      gap: "16px",
-                    }}
-                  >
-                    {[
-                      ["SKU", "sku", "text", "PROD-SKU-001"],
-                      ["MRP (₹)", "mrp", "number", "0.00"],
-                      ["Selling Price (₹) *", "sellingPrice", "number", "0.00"],
-                      ["Stock Quantity", "stockQuantity", "number", "0"],
-                    ].map(([label, name, type, placeholder]) => (
-                      <div key={name}>
+                      {(variant.images?.length || 0) < 3 && (
                         <label
                           style={{
-                            display: "block",
-                            fontSize: "14px",
-                            fontWeight: "500",
-                            marginBottom: "8px",
-                            color: "#374151",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: "80px",
+                            height: "80px",
+                            border: "2px dashed #d1d5db",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            color: "#6b7280",
+                            backgroundColor: "#f9fafb",
                           }}
-                        >
-                          {label}
-                        </label>
-                        <input
-                          type={type}
-                          name={name}
-                          value={formData[name]}
-                          onChange={handleInputChange}
-                          placeholder={placeholder}
-                          step={type === "number" ? "0.01" : undefined}
-                          style={{
-                            width: "100%",
-                            padding: "12px 14px",
-                            border:
-                              name === "sellingPrice" && priceValidationMessage
-                                ? "1px solid #ef4444"
-                                : "1px solid #d1d5db",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            outline: "none",
-                            backgroundColor: "white",
-                          }}
-                          onFocus={(e) => {
-                            e.target.style.borderColor = "#667eea";
-                            e.target.style.boxShadow =
-                              "0 0 0 3px rgba(102,126,234,0.1)";
-                          }}
-                          onBlur={(e) => {
-                            e.target.style.borderColor = "#d1d5db";
-                            e.target.style.boxShadow = "none";
-                          }}
-                        />
-                        {name === "sellingPrice" && priceValidationMessage && (
-                          <div
-                            style={{
-                              fontSize: "12px",
-                              color: "#ef4444",
-                              marginTop: "4px",
-                            }}
-                          >
-                            {priceValidationMessage}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    marginBottom: "40px",
-                    padding: "24px",
-                    backgroundColor: "#f9fafb",
-                    borderRadius: "12px",
-                    border: "1px solid #e5e7eb",
-                  }}
-                >
-                  <h3
-                    style={{
-                      fontSize: "18px",
-                      fontWeight: "600",
-                      color: "#111827",
-                      marginBottom: "20px",
-                    }}
-                  >
-                    Dimensions & Weight
-                  </h3>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr 1fr 1fr",
-                      gap: "16px",
-                    }}
-                  >
-                    {[
-                      ["Weight (g)", "dimensions.weight"],
-                      ["Length (cm)", "dimensions.length"],
-                      ["Width (cm)", "dimensions.width"],
-                      ["Height (cm)", "dimensions.height"],
-                    ].map(([label, name]) => (
-                      <div key={name}>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "14px",
-                            fontWeight: "500",
-                            marginBottom: "8px",
-                            color: "#374151",
-                          }}
-                        >
-                          {label}
-                        </label>
-                        <input
-                          type="number"
-                          name={name}
-                          value={
-                            name === "dimensions.weight"
-                              ? formData.dimensions.weight
-                              : name === "dimensions.length"
-                                ? formData.dimensions.length
-                                : name === "dimensions.width"
-                                  ? formData.dimensions.width
-                                  : formData.dimensions.height
+                          onMouseEnter={(e) =>
+                            (e.currentTarget.style.borderColor = "#3b82f6")
                           }
-                          onChange={handleInputChange}
-                          placeholder="0.00"
-                          step="0.01"
-                          style={{
-                            width: "100%",
-                            padding: "12px 14px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            outline: "none",
-                            backgroundColor: "white",
-                          }}
-                          onFocus={(e) => {
-                            e.target.style.borderColor = "#667eea";
-                            e.target.style.boxShadow =
-                              "0 0 0 3px rgba(102,126,234,0.1)";
-                          }}
-                          onBlur={(e) => {
-                            e.target.style.borderColor = "#d1d5db";
-                            e.target.style.boxShadow = "none";
-                          }}
-                        />
-                      </div>
-                    ))}
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.borderColor = "#d1d5db")
+                          }
+                        >
+                          <span style={{ fontSize: "28px", lineHeight: 1 }}>
+                            +
+                          </span>
+                          <span style={{ fontSize: "10px", marginTop: "2px" }}>
+                            {variant.images?.length || 0}/3
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            style={{ display: "none" }}
+                            onChange={(e) =>
+                              handleVariantImageUpload(index, e.target.files)
+                            }
+                          />
+                        </label>
+                      )}
+                    </div>
+                    {(variant.images?.length || 0) > 0 && (
+                      <p
+                        style={{
+                          fontSize: "12px",
+                          color: "#6b7280",
+                          marginTop: "6px",
+                        }}
+                      >
+                        {variant.images.length}/3 images
+                      </p>
+                    )}
                   </div>
                 </div>
-              </>
-            )}
-
-            {/* ===== WARRANTY & RETURN ===== */}
-            <div
-              style={{
-                marginBottom: "40px",
-                padding: "24px",
-                backgroundColor: "#f9fafb",
-                borderRadius: "12px",
-                border: "1px solid #e5e7eb",
-              }}
-            >
-              <h3
+              ))}
+              <button
+                type="button"
+                onClick={addVariant}
                 style={{
-                  fontSize: "18px",
-                  fontWeight: "600",
-                  color: "#111827",
-                  marginBottom: "20px",
+                  padding: "10px 20px",
+                  backgroundColor: "#3b82f6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  cursor: "pointer",
+                  fontWeight: "500",
                 }}
               >
-                Warranty & Return Policy
-              </h3>
-              <div style={{ display: "grid", gap: "16px" }}>
-                {[
-                  [
-                    "warranty",
-                    "Warranty *",
-                    "e.g., 1 Year Manufacturer Warranty",
-                  ],
-                  [
-                    "returnPolicy",
-                    "Return Policy *",
-                    "e.g., 7 Days Replacement Policy",
-                  ],
-                ].map(([name, label, placeholder]) => (
-                  <div key={name}>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        marginBottom: "8px",
-                        color: "#374151",
-                      }}
-                    >
-                      {label}
-                    </label>
-                    <textarea
-                      name={name}
-                      value={formData[name]}
-                      onChange={handleInputChange}
-                      required
-                      rows="3"
-                      placeholder={placeholder}
-                      style={{
-                        width: "100%",
-                        padding: "12px 14px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                        resize: "vertical",
-                        fontFamily: "inherit",
-                        backgroundColor: "white",
-                      }}
-                      onFocus={(e) => {
-                        e.target.style.borderColor = "#667eea";
-                        e.target.style.boxShadow =
-                          "0 0 0 3px rgba(102,126,234,0.1)";
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = "#d1d5db";
-                        e.target.style.boxShadow = "none";
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
+                + Add Variant
+              </button>
             </div>
 
-            {/* ===== SEO & MARKETING ===== */}
+            {/* ══ TOP DEAL ══ */}
             <div
               style={{
-                marginBottom: "40px",
-                padding: "24px",
-                backgroundColor: "#f9fafb",
+                marginBottom: "32px",
+                padding: "20px",
+                border: "1px solid #fde68a",
                 borderRadius: "12px",
-                border: "1px solid #e5e7eb",
+                backgroundColor: "#fffbeb",
               }}
             >
-              <h3
+              <div
                 style={{
-                  fontSize: "18px",
-                  fontWeight: "600",
-                  color: "#111827",
-                  marginBottom: "20px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: "16px",
                 }}
               >
-                SEO & Marketing
-              </h3>
-              <div style={{ display: "grid", gap: "16px" }}>
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "14px",
-                      fontWeight: "500",
-                      marginBottom: "8px",
-                      color: "#374151",
-                    }}
-                  >
-                    Meta Title
-                  </label>
-                  <input
-                    type="text"
-                    name="metaTitle"
-                    value={formData.metaTitle}
-                    onChange={handleInputChange}
-                    placeholder="e.g., Samsung Galaxy S24 - Buy Online"
-                    style={{
-                      width: "100%",
-                      padding: "12px 14px",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      outline: "none",
-                      backgroundColor: "white",
-                    }}
-                  />
-                </div>
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "14px",
-                      fontWeight: "500",
-                      marginBottom: "8px",
-                      color: "#374151",
-                    }}
-                  >
-                    Meta Description
-                  </label>
-                  <textarea
-                    name="metaDescription"
-                    value={formData.metaDescription}
-                    onChange={handleInputChange}
-                    rows="3"
-                    placeholder="e.g., Shop Samsung Galaxy S24 at best price in India"
-                    style={{
-                      width: "100%",
-                      padding: "12px 14px",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      outline: "none",
-                      resize: "vertical",
-                      fontFamily: "inherit",
-                      backgroundColor: "white",
-                    }}
-                  />
-                </div>
                 <div
+                  style={{ display: "flex", alignItems: "center", gap: "8px" }}
+                >
+                  <MdLocalOffer size={18} color="#f59e0b" />
+                  <span
+                    style={{
+                      fontSize: "15px",
+                      fontWeight: "600",
+                      color: "#92400e",
+                    }}
+                  >
+                    Top Deal
+                  </span>
+                  {selectedTopDeal !== originalTopDeal && (
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        padding: "1px 8px",
+                        backgroundColor: "#fee2e2",
+                        color: "#991b1b",
+                        borderRadius: "99px",
+                        fontWeight: "600",
+                      }}
+                    >
+                      ● Unsaved
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateDeal(true)}
                   style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "16px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "7px 14px",
+                    backgroundColor: "#f59e0b",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    cursor: "pointer",
                   }}
                 >
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        marginBottom: "8px",
-                        color: "#374151",
-                      }}
-                    >
-                      Tags (comma-separated)
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.tags.join(", ")}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          tags: e.target.value
-                            .split(",")
-                            .map((t) => t.trim())
-                            .filter(Boolean),
-                        }))
-                      }
-                      placeholder="mobile, android, 5g"
-                      style={{
-                        width: "100%",
-                        padding: "12px 14px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                        backgroundColor: "white",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        marginBottom: "8px",
-                        color: "#374151",
-                      }}
-                    >
-                      SEO Keywords (comma-separated)
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.keywords.join(", ")}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          keywords: e.target.value
-                            .split(",")
-                            .map((k) => k.trim())
-                            .filter(Boolean),
-                        }))
-                      }
-                      placeholder="samsung, galaxy, s24, smartphone"
-                      style={{
-                        width: "100%",
-                        padding: "12px 14px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        outline: "none",
-                        backgroundColor: "white",
-                      }}
-                    />
-                  </div>
-                </div>
+                  + New Deal
+                </button>
               </div>
-            </div>
 
-            {/* ===== PRODUCT SETTINGS ===== */}
-            <div
-              style={{
-                marginBottom: "40px",
-                padding: "24px",
-                backgroundColor: "#f9fafb",
-                borderRadius: "12px",
-                border: "1px solid #e5e7eb",
-              }}
-            >
-              <h3
-                style={{
-                  fontSize: "18px",
-                  fontWeight: "600",
-                  color: "#111827",
-                  marginBottom: "20px",
-                }}
-              >
-                Product Settings
-              </h3>
-              <div style={{ display: "flex", gap: "32px", flexWrap: "wrap" }}>
-                {[
-                  ["isRecommended", "⭐ Recommended Product"],
-                  ["isFeatured", "🔥 Featured Product"],
-                  ["isDigital", "💾 Digital Product"],
-                ].map(([name, label]) => (
+              {topDealsLoading ? (
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "16px",
+                    color: "#6b7280",
+                    fontSize: "14px",
+                  }}
+                >
+                  Loading deals...
+                </div>
+              ) : topDeals.length === 0 ? (
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "16px",
+                    color: "#9ca3af",
+                    fontSize: "14px",
+                  }}
+                >
+                  No deals yet — create one above
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  }}
+                >
                   <label
-                    key={name}
                     style={{
                       display: "flex",
                       alignItems: "center",
                       gap: "10px",
-                      fontSize: "14px",
-                      color: "#374151",
+                      padding: "10px 14px",
+                      border: `2px solid ${!selectedTopDeal ? "#f59e0b" : "#e5e7eb"}`,
+                      borderRadius: "8px",
                       cursor: "pointer",
-                      fontWeight: "500",
+                      backgroundColor: !selectedTopDeal ? "#fffbeb" : "white",
                     }}
                   >
                     <input
-                      type="checkbox"
-                      name={name}
-                      checked={formData[name]}
-                      onChange={handleInputChange}
+                      type="radio"
+                      name="topDeal"
+                      value=""
+                      checked={!selectedTopDeal}
+                      onChange={() => setSelectedTopDeal("")}
                       style={{
-                        width: "18px",
-                        height: "18px",
-                        cursor: "pointer",
-                        accentColor: "#667eea",
+                        width: "15px",
+                        height: "15px",
+                        accentColor: "#f59e0b",
                       }}
                     />
-                    <span>{label}</span>
+                    <span
+                      style={{
+                        fontSize: "13px",
+                        color: "#6b7280",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      None — no deal linked
+                    </span>
                   </label>
-                ))}
-              </div>
+                  {topDeals.map((deal) => (
+                    <div
+                      key={deal._id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        padding: "10px 14px",
+                        border: `2px solid ${selectedTopDeal === deal._id ? "#f59e0b" : "#e5e7eb"}`,
+                        borderRadius: "8px",
+                        backgroundColor:
+                          selectedTopDeal === deal._id ? "#fffbeb" : "white",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="topDeal"
+                        value={deal._id}
+                        checked={selectedTopDeal === deal._id}
+                        onChange={() => setSelectedTopDeal(deal._id)}
+                        style={{
+                          width: "15px",
+                          height: "15px",
+                          accentColor: "#f59e0b",
+                          flexShrink: 0,
+                          cursor: "pointer",
+                        }}
+                      />
+                      <div
+                        style={{
+                          width: "40px",
+                          height: "40px",
+                          borderRadius: "6px",
+                          overflow: "hidden",
+                          flexShrink: 0,
+                          border: "1px solid #e5e7eb",
+                        }}
+                      >
+                        {deal.image?.url ? (
+                          <img
+                            src={deal.image.url}
+                            alt={deal.title}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              backgroundColor: "#f9fafb",
+                            }}
+                          >
+                            <MdLocalOffer size={14} color="#d1d5db" />
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: "13px",
+                            fontWeight: "600",
+                            color: "#111827",
+                          }}
+                        >
+                          {deal.title}
+                        </div>
+                        {deal.description && (
+                          <div
+                            style={{
+                              fontSize: "11px",
+                              color: "#6b7280",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {deal.description}
+                          </div>
+                        )}
+                        <div
+                          style={{
+                            fontSize: "11px",
+                            color: "#6b7280",
+                            marginTop: "2px",
+                          }}
+                        >
+                          {deal.products?.length || 0} product(s)
+                        </div>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          padding: "2px 7px",
+                          borderRadius: "99px",
+                          backgroundColor: deal.isActive
+                            ? "#dcfce7"
+                            : "#fee2e2",
+                          color: deal.isActive ? "#166534" : "#991b1b",
+                          fontWeight: "600",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {deal.isActive ? "Active" : "Inactive"}
+                      </span>
+                      <div
+                        style={{ display: "flex", gap: "4px", flexShrink: 0 }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleToggleDealStatus(deal._id)}
+                          title={deal.isActive ? "Deactivate" : "Activate"}
+                          style={{
+                            padding: "5px",
+                            backgroundColor: "white",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            color: deal.isActive ? "#10b981" : "#9ca3af",
+                          }}
+                        >
+                          {deal.isActive ? (
+                            <MdToggleOn size={18} />
+                          ) : (
+                            <MdToggleOff size={18} />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEditDeal(deal)}
+                          title="Edit deal"
+                          style={{
+                            padding: "5px",
+                            backgroundColor: "white",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            color: "#3b82f6",
+                          }}
+                        >
+                          <MdEdit size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDeal(deal._id)}
+                          disabled={deletingDealId === deal._id}
+                          title="Delete deal"
+                          style={{
+                            padding: "5px",
+                            backgroundColor: "white",
+                            border: "1px solid #fecaca",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            color: "#ef4444",
+                          }}
+                        >
+                          <MdDelete size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* ===== DANGER ZONE ===== */}
+            {/* ══ CHECKBOXES ══ */}
+            <div
+              style={{
+                marginBottom: "32px",
+                display: "flex",
+                gap: "24px",
+                flexWrap: "wrap",
+              }}
+            >
+              {[
+                { name: "isRecommended", label: "Recommended Product" },
+                { name: "isFeatured", label: "Featured Product" },
+                { name: "isDigital", label: "Digital Product" },
+                { name: "allowBackorder", label: "Allow Backorder" },
+              ].map(({ name, label }) => (
+                <label
+                  key={name}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    fontSize: "14px",
+                    color: "#374151",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    name={name}
+                    checked={!!formData[name]}
+                    onChange={handleInputChange}
+                    style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+
+            {/* ══ DANGER ZONE ══ */}
             <div
               style={{
                 padding: "24px",
@@ -2585,8 +2791,7 @@ function ProductEdit() {
                   marginBottom: "16px",
                 }}
               >
-                Once you delete a product, this action cannot be undone. Please
-                be certain.
+                Once you delete this product, the action cannot be undone.
               </p>
               <button
                 type="button"
@@ -2610,67 +2815,706 @@ function ProductEdit() {
             </div>
           </div>
 
-          {/* ===== FOOTER ACTIONS ===== */}
+          {/* ══ FOOTER ══ */}
           <div
             style={{
-              padding: "24px 32px",
+              padding: "20px 32px",
               borderTop: "1px solid #e5e7eb",
               backgroundColor: "#fafafa",
               display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: "12px",
             }}
           >
-            <div style={{ fontSize: "13px", color: "#6b7280" }}>
-              * Required fields must be filled
-            </div>
-            <div style={{ display: "flex", gap: "12px" }}>
-              <Link
-                to={`/admin/products/details/${id}`}
+            <Link
+              to={`/admin/products/details/${id}`}
+              style={{
+                padding: "10px 20px",
+                backgroundColor: "white",
+                color: "#374151",
+                border: "1px solid #d1d5db",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontSize: "14px",
+                fontWeight: "500",
+                display: "inline-flex",
+                alignItems: "center",
+              }}
+            >
+              Cancel
+            </Link>
+            <button
+              type="submit"
+              disabled={saving}
+              style={{
+                padding: "10px 24px",
+                backgroundColor: saving ? "#9ca3af" : "#3b82f6",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                fontSize: "14px",
+                fontWeight: "500",
+                cursor: saving ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <MdSave size={16} /> {saving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* ══ CREATE DEAL MODAL ══ */}
+      {showCreateDeal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9998,
+            padding: "20px",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              borderRadius: "16px",
+              boxShadow: "0 25px 50px rgba(0,0,0,0.25)",
+              width: "100%",
+              maxWidth: "500px",
+              maxHeight: "90vh",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <div
+              style={{
+                padding: "20px 24px",
+                borderBottom: "1px solid #e5e7eb",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div
                 style={{
-                  padding: "12px 24px",
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  color: "#111827",
+                }}
+              >
+                Create New Deal
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateDeal(false)}
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  backgroundColor: "#f3f4f6",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <MdClose size={18} />
+              </button>
+            </div>
+            <div style={{ padding: "24px", overflowY: "auto", flex: 1 }}>
+              <div style={{ marginBottom: "14px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "12px",
+                    fontWeight: "500",
+                    color: "#374151",
+                    marginBottom: "5px",
+                  }}
+                >
+                  Title*
+                </label>
+                <input
+                  type="text"
+                  value={newDeal.title}
+                  onChange={(e) =>
+                    setNewDeal((p) => ({ ...p, title: e.target.value }))
+                  }
+                  placeholder="e.g., Summer Sale"
+                  style={{ ...inp, fontSize: "13px" }}
+                  onFocus={(e) => (e.target.style.borderColor = "#f59e0b")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+              <div style={{ marginBottom: "14px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "12px",
+                    fontWeight: "500",
+                    color: "#374151",
+                    marginBottom: "5px",
+                  }}
+                >
+                  Description
+                </label>
+                <textarea
+                  value={newDeal.description}
+                  onChange={(e) =>
+                    setNewDeal((p) => ({ ...p, description: e.target.value }))
+                  }
+                  placeholder="Deal description..."
+                  rows="3"
+                  style={{
+                    ...inp,
+                    fontSize: "13px",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#f59e0b")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "12px",
+                    fontWeight: "500",
+                    color: "#374151",
+                    marginBottom: "8px",
+                  }}
+                >
+                  Images{" "}
+                  <span style={{ color: "#9ca3af" }}>(multiple allowed)</span>
+                </label>
+                {newDealPreviews.length > 0 && (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(80px, 1fr))",
+                      gap: "8px",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    {newDealPreviews.map((preview, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          position: "relative",
+                          borderRadius: "8px",
+                          overflow: "hidden",
+                          border: "1px solid #e5e7eb",
+                          aspectRatio: "1",
+                        }}
+                      >
+                        <img
+                          src={preview}
+                          alt=""
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            URL.revokeObjectURL(preview);
+                            setNewDealPreviews((p) =>
+                              p.filter((_, i) => i !== idx),
+                            );
+                            setNewDealImages((p) =>
+                              p.filter((_, i) => i !== idx),
+                            );
+                          }}
+                          style={{
+                            position: "absolute",
+                            top: "3px",
+                            right: "3px",
+                            width: "18px",
+                            height: "18px",
+                            backgroundColor: "#ef4444",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "50%",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <MdClose size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div
+                  onClick={() => newDealImgRef.current.click()}
+                  style={{
+                    border: "2px dashed #f59e0b",
+                    borderRadius: "10px",
+                    padding: "16px",
+                    textAlign: "center",
+                    cursor: "pointer",
+                    backgroundColor: "#fffbeb",
+                  }}
+                >
+                  <MdCloudUpload size={24} color="#f59e0b" />
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#92400e",
+                      marginTop: "4px",
+                    }}
+                  >
+                    Click to upload
+                  </div>
+                </div>
+                <input
+                  ref={newDealImgRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files);
+                    setNewDealImages((p) => [...p, ...files]);
+                    setNewDealPreviews((p) => [
+                      ...p,
+                      ...files.map((f) => URL.createObjectURL(f)),
+                    ]);
+                    e.target.value = "";
+                  }}
+                  style={{ display: "none" }}
+                />
+              </div>
+            </div>
+            <div
+              style={{
+                padding: "16px 24px",
+                borderTop: "1px solid #e5e7eb",
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "10px",
+                backgroundColor: "#fafafa",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowCreateDeal(false)}
+                style={{
+                  padding: "9px 18px",
                   backgroundColor: "white",
                   color: "#374151",
                   border: "1px solid #d1d5db",
                   borderRadius: "8px",
-                  textDecoration: "none",
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  display: "inline-flex",
-                  alignItems: "center",
+                  fontSize: "13px",
+                  cursor: "pointer",
                 }}
               >
                 Cancel
-              </Link>
+              </button>
               <button
-                type="submit"
-                disabled={saving}
+                type="button"
+                onClick={handleCreateDeal}
+                disabled={creating || !newDeal.title.trim()}
                 style={{
-                  padding: "12px 32px",
-                  background: saving
-                    ? "#9ca3af"
-                    : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "9px 20px",
+                  backgroundColor:
+                    creating || !newDeal.title.trim() ? "#9ca3af" : "#f59e0b",
                   color: "white",
                   border: "none",
                   borderRadius: "8px",
-                  fontSize: "14px",
+                  fontSize: "13px",
                   fontWeight: "600",
-                  cursor: saving ? "not-allowed" : "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  boxShadow: saving
-                    ? "none"
-                    : "0 4px 6px rgba(102,126,234,0.3)",
+                  cursor: creating ? "not-allowed" : "pointer",
                 }}
               >
-                <MdSave size={18} />
-                {saving ? "Saving..." : "Save Changes"}
+                <MdCheck size={15} />{" "}
+                {creating ? "Creating..." : "Create & Link"}
               </button>
             </div>
           </div>
-        </form>
-      </div>
+        </div>
+      )}
+
+      {/* ══ EDIT DEAL MODAL ══ */}
+      {editingDeal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9998,
+            padding: "20px",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              borderRadius: "16px",
+              boxShadow: "0 25px 50px rgba(0,0,0,0.25)",
+              width: "100%",
+              maxWidth: "500px",
+              maxHeight: "90vh",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <div
+              style={{
+                padding: "20px 24px",
+                borderBottom: "1px solid #e5e7eb",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  color: "#111827",
+                }}
+              >
+                Edit Deal: {editingDeal.title}
+              </div>
+              <button
+                type="button"
+                onClick={closeEditDeal}
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  backgroundColor: "#f3f4f6",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <MdClose size={18} />
+              </button>
+            </div>
+            <div style={{ padding: "24px", overflowY: "auto", flex: 1 }}>
+              <div style={{ marginBottom: "14px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "12px",
+                    fontWeight: "500",
+                    color: "#374151",
+                    marginBottom: "5px",
+                  }}
+                >
+                  Title*
+                </label>
+                <input
+                  type="text"
+                  value={editDealData.title}
+                  onChange={(e) =>
+                    setEditDealData((p) => ({ ...p, title: e.target.value }))
+                  }
+                  placeholder="Deal title"
+                  style={{ ...inp, fontSize: "13px" }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+              <div style={{ marginBottom: "14px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "12px",
+                    fontWeight: "500",
+                    color: "#374151",
+                    marginBottom: "5px",
+                  }}
+                >
+                  Description
+                </label>
+                <textarea
+                  value={editDealData.description}
+                  onChange={(e) =>
+                    setEditDealData((p) => ({
+                      ...p,
+                      description: e.target.value,
+                    }))
+                  }
+                  rows="3"
+                  style={{
+                    ...inp,
+                    fontSize: "13px",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+              {editDealExisting.length > 0 && (
+                <div style={{ marginBottom: "14px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "12px",
+                      fontWeight: "500",
+                      color: "#374151",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    Current Images
+                  </label>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(80px, 1fr))",
+                      gap: "8px",
+                    }}
+                  >
+                    {editDealExisting.map((img, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          position: "relative",
+                          borderRadius: "8px",
+                          overflow: "hidden",
+                          border: "1px solid #e5e7eb",
+                          aspectRatio: "1",
+                        }}
+                      >
+                        <img
+                          src={img.url}
+                          alt=""
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditDealExisting((p) =>
+                              p.filter((_, i) => i !== idx),
+                            );
+                            setEditDealToDelete((p) => [...p, img.public_id]);
+                          }}
+                          style={{
+                            position: "absolute",
+                            top: "3px",
+                            right: "3px",
+                            width: "18px",
+                            height: "18px",
+                            backgroundColor: "#ef4444",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "50%",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <MdClose size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "12px",
+                    fontWeight: "500",
+                    color: "#374151",
+                    marginBottom: "8px",
+                  }}
+                >
+                  Add More Images
+                </label>
+                {editDealPreviews.length > 0 && (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(80px, 1fr))",
+                      gap: "8px",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    {editDealPreviews.map((preview, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          position: "relative",
+                          borderRadius: "8px",
+                          overflow: "hidden",
+                          border: "1px solid #e5e7eb",
+                          aspectRatio: "1",
+                        }}
+                      >
+                        <img
+                          src={preview}
+                          alt=""
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            URL.revokeObjectURL(preview);
+                            setEditDealPreviews((p) =>
+                              p.filter((_, i) => i !== idx),
+                            );
+                            setEditDealImages((p) =>
+                              p.filter((_, i) => i !== idx),
+                            );
+                          }}
+                          style={{
+                            position: "absolute",
+                            top: "3px",
+                            right: "3px",
+                            width: "18px",
+                            height: "18px",
+                            backgroundColor: "#ef4444",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "50%",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <MdClose size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div
+                  onClick={() => editDealImgRef.current.click()}
+                  style={{
+                    border: "2px dashed #3b82f6",
+                    borderRadius: "10px",
+                    padding: "16px",
+                    textAlign: "center",
+                    cursor: "pointer",
+                    backgroundColor: "#eff6ff",
+                  }}
+                >
+                  <MdCloudUpload size={24} color="#3b82f6" />
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#1d4ed8",
+                      marginTop: "4px",
+                    }}
+                  >
+                    Click to upload
+                  </div>
+                </div>
+                <input
+                  ref={editDealImgRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files);
+                    setEditDealImages((p) => [...p, ...files]);
+                    setEditDealPreviews((p) => [
+                      ...p,
+                      ...files.map((f) => URL.createObjectURL(f)),
+                    ]);
+                    e.target.value = "";
+                  }}
+                  style={{ display: "none" }}
+                />
+              </div>
+            </div>
+            <div
+              style={{
+                padding: "16px 24px",
+                borderTop: "1px solid #e5e7eb",
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "10px",
+                backgroundColor: "#fafafa",
+              }}
+            >
+              <button
+                type="button"
+                onClick={closeEditDeal}
+                style={{
+                  padding: "9px 18px",
+                  backgroundColor: "white",
+                  color: "#374151",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "8px",
+                  fontSize: "13px",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleUpdateDeal}
+                disabled={updating || !editDealData.title.trim()}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "9px 20px",
+                  backgroundColor:
+                    updating || !editDealData.title.trim()
+                      ? "#9ca3af"
+                      : "#3b82f6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  cursor: updating ? "not-allowed" : "pointer",
+                }}
+              >
+                <MdCheck size={15} /> {updating ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
     </div>

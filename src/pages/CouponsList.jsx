@@ -55,7 +55,7 @@ export default function CouponsList() {
           </h1>
         </div>
         <div className="page-actions">
-          <Link to="/coupons/create" className="btn btn-primary">
+          <Link to="/admin/coupons/create" className="btn btn-primary">
             <MdAdd size={20} />
             Create New Coupons
           </Link>
@@ -118,7 +118,7 @@ export default function CouponsList() {
                   <td>
                     <div className="action-buttons">
                       <Link
-                        to={`/coupons/update/${item._id}`}
+                        to={`/admin/coupons/update/${item._id}`}
                         className="action-btn edit"
                         title="Edit Order"
                       >

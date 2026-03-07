@@ -2,8 +2,8 @@ import axios from "axios";
 
 const directBase =
   typeof window !== "undefined"
-    ? `${window.location.protocol}//${window.location.hostname}:3000/api`
-    : "http://localhost:3000/api";
+    ? `${window.location.protocol}//${window.location.hostname}:https://miltronix-backend-2.onrender.com/api`
+    : "https://miltronix-backend-2.onrender.com/api";
 
 let apiBase =
   typeof import.meta !== "undefined" &&

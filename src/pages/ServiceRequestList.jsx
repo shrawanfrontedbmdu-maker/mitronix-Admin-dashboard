@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   MdEdit,
   MdAssignment,
@@ -12,13 +12,13 @@ import {
   MdPerson,
   MdPhone,
   MdEmail,
-  MdLocationOn,
   MdClose,
   MdSave,
+  MdDelete,
 } from "react-icons/md";
+import { useNavigate } from "react-router-dom";
 import serviceRequestService from "../api/serviceRequestService";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
 const STATUS_OPTIONS = ["open", "in progress", "completed", "cancelled"];
 const TYPE_OPTIONS = [
   "demo",
@@ -41,8 +41,9 @@ const PRIORITY_STYLES = {
   low: { bg: "#F0FDF4", color: "#15803D" },
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
 export default function ServiceRequestList() {
+  const navigate = useNavigate();
+
   const [serviceRequests, setServiceRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -66,70 +67,80 @@ export default function ServiceRequestList() {
     priority: "",
   });
 
-  // Modals
-  const [viewModal, setViewModal] = useState(null);
-  const [editModal, setEditModal] = useState(null); // { id, data }
+  // Modals — NO viewModal (removed)
+  const [editModal, setEditModal] = useState(null);
   const [assignModal, setAssignModal] = useState(null);
+  const [deleteModal, setDeleteModal] = useState(null);
   const [editData, setEditData] = useState({});
   const [editLoading, setEditLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [assignTo, setAssignTo] = useState("");
 
+  // ── Fetch ──────────────────────────────────────────────────────────────────
+  const fetchServiceRequests = useCallback(
+    async (currentFilters) => {
+      try {
+        setLoading(true);
+        setError("");
+        const f = currentFilters || filters;
+        const hasFilter = f.status || f.type || f.priority;
+        const clean = Object.fromEntries(
+          Object.entries(f).filter(([, v]) => v !== ""),
+        );
+        const res = hasFilter
+          ? await serviceRequestService.filter(clean)
+          : await serviceRequestService.getAll(clean);
+        const data = res.data || [];
+        setServiceRequests(data);
+        setPagination({
+          page: res.page || 1,
+          totalPages: res.totalPages || 1,
+          total: res.total || 0,
+        });
+        setStats({
+          open: data.filter((r) => r.status === "open").length,
+          inProgress: data.filter((r) => r.status === "in progress").length,
+          completed: data.filter((r) => r.status === "completed").length,
+          high: data.filter((r) => r.priority === "high").length,
+        });
+      } catch (err) {
+        setError(err.message || "Failed to fetch service requests");
+        setServiceRequests([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [filters],
+  );
+
   useEffect(() => {
-    fetchServiceRequests();
+    fetchServiceRequests(filters);
   }, [filters]);
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
-  const fetchServiceRequests = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const cleanParams = Object.fromEntries(
-        Object.entries(filters).filter(([, v]) => v !== ""),
-      );
-      const response = await serviceRequestService.getAll(cleanParams);
-      const data = response.data || [];
-      setServiceRequests(data);
-      setPagination({
-        page: response.page || 1,
-        totalPages: response.totalPages || 1,
-        total: response.total || 0,
-      });
-      setStats({
-        open: data.filter((r) => r.status === "open").length,
-        inProgress: data.filter((r) => r.status === "in progress").length,
-        completed: data.filter((r) => r.status === "completed").length,
-        high: data.filter((r) => r.priority === "high").length,
-      });
-    } catch (err) {
-      setError(err.message || "Failed to fetch service requests");
-      setServiceRequests([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ── Filters ────────────────────────────────────────────────────────────────
   const handleFilterChange = (key, value) =>
-    setFilters((prev) => ({
-      ...prev,
+    setFilters((p) => ({
+      ...p,
       [key]: value,
-      page: key !== "page" ? 1 : value,
+      ...(key !== "page" ? { page: 1 } : {}),
     }));
-
   const clearFilters = () =>
     setFilters({ page: 1, limit: 10, status: "", type: "", priority: "" });
 
-  // ── Inline status change ───────────────────────────────────────────────────
+  // ── Status change — optimistic ─────────────────────────────────────────────
   const handleStatusChange = async (id, newStatus) => {
+    setServiceRequests((p) =>
+      p.map((r) => (r._id === id ? { ...r, status: newStatus } : r)),
+    );
     try {
       await serviceRequestService.updateStatus(id, newStatus);
-      fetchServiceRequests();
+      fetchServiceRequests(filters);
     } catch (err) {
       setError(err.message || "Failed to update status");
+      fetchServiceRequests(filters);
     }
   };
 
-  // ── Open Edit Modal ────────────────────────────────────────────────────────
+  // ── Edit ───────────────────────────────────────────────────────────────────
   const openEdit = async (id) => {
     try {
       const data = await serviceRequestService.getById(id);
@@ -157,22 +168,36 @@ export default function ServiceRequestList() {
         },
       });
       setEditModal({ id, productname: data.productname });
-    } catch (err) {
+    } catch {
       setError("Failed to load request details");
     }
   };
 
-  // ── Save Edit ──────────────────────────────────────────────────────────────
   const handleEditSave = async () => {
     try {
       setEditLoading(true);
       await serviceRequestService.update(editModal.id, editData);
       setEditModal(null);
-      fetchServiceRequests();
+      fetchServiceRequests(filters);
     } catch (err) {
       setError(err.response?.data?.message || err.message || "Failed to save");
     } finally {
       setEditLoading(false);
+    }
+  };
+
+  // ── Delete ─────────────────────────────────────────────────────────────────
+  const handleDelete = async () => {
+    if (!deleteModal) return;
+    try {
+      setDeleteLoading(true);
+      await serviceRequestService.delete(deleteModal._id);
+      setDeleteModal(null);
+      fetchServiceRequests(filters);
+    } catch (err) {
+      setError(err.message || "Failed to delete");
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -183,40 +208,37 @@ export default function ServiceRequestList() {
       await serviceRequestService.assign(assignModal._id, assignTo.trim());
       setAssignModal(null);
       setAssignTo("");
-      fetchServiceRequests();
+      fetchServiceRequests(filters);
     } catch (err) {
       setError(err.message || "Failed to assign");
     }
   };
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  const formatDate = (d) => {
-    if (!d) return "—";
-    return new Date(d).toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  };
+  const formatDate = (d) =>
+    !d
+      ? "—"
+      : new Date(d).toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        });
   const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "—");
   const activeFilterCount = [
     filters.status,
     filters.type,
     filters.priority,
   ].filter(Boolean).length;
-
-  const setAddr = (key, val) =>
-    setEditData((p) => ({ ...p, address: { ...p.address, [key]: val } }));
-  const setPay = (key, val) =>
+  const setAddr = (k, v) =>
+    setEditData((p) => ({ ...p, address: { ...p.address, [k]: v } }));
+  const setPay = (k, v) =>
     setEditData((p) => ({
       ...p,
-      paymentdetails: { ...p.paymentdetails, [key]: val },
+      paymentdetails: { ...p.paymentdetails, [k]: v },
     }));
 
-  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div style={s.page}>
-      {/* ── Header ── */}
+      {/* Header */}
       <div style={s.header}>
         <div>
           <h1 style={s.title}>Service Requests</h1>
@@ -224,7 +246,7 @@ export default function ServiceRequestList() {
         </div>
         <div style={s.headerActions}>
           <button
-            onClick={fetchServiceRequests}
+            onClick={() => fetchServiceRequests(filters)}
             style={s.iconBtn}
             title="Refresh"
           >
@@ -245,7 +267,7 @@ export default function ServiceRequestList() {
         </div>
       </div>
 
-      {/* ── Stats ── */}
+      {/* Stats */}
       <div style={s.statsRow}>
         {[
           {
@@ -291,7 +313,7 @@ export default function ServiceRequestList() {
         ))}
       </div>
 
-      {/* ── Filter Panel ── */}
+      {/* Filters */}
       {showFilters && (
         <div style={s.filtersPanel}>
           <div style={s.filtersRow}>
@@ -341,7 +363,7 @@ export default function ServiceRequestList() {
         </div>
       )}
 
-      {/* ── Error ── */}
+      {/* Error */}
       {error && (
         <div style={s.errorBox}>
           {error}
@@ -351,7 +373,7 @@ export default function ServiceRequestList() {
         </div>
       )}
 
-      {/* ── Table ── */}
+      {/* Table */}
       <div style={s.tableCard}>
         {loading ? (
           <div style={s.emptyState}>
@@ -406,20 +428,17 @@ export default function ServiceRequestList() {
                       background: i % 2 === 0 ? "#fff" : "#FAFAFA",
                     }}
                   >
-                    {/* Ticket */}
                     <td style={s.td}>
                       <span style={s.ticketId}>
                         #{String(req._id).slice(-6).toUpperCase()}
                       </span>
                     </td>
 
-                    {/* Product */}
                     <td style={s.td}>
                       <div style={s.productName}>{req.productname || "—"}</div>
                       <div style={s.subText}>{cap(req.type)}</div>
                     </td>
 
-                    {/* User — fullName, email, mobile */}
                     <td style={s.td}>
                       <div style={s.userCell}>
                         <div style={s.userAvatar}>
@@ -446,12 +465,10 @@ export default function ServiceRequestList() {
                       </div>
                     </td>
 
-                    {/* Type */}
                     <td style={s.td}>
                       <span style={s.typeBadge}>{req.type || "—"}</span>
                     </td>
 
-                    {/* Priority */}
                     <td style={s.td}>
                       {req.priority ? (
                         <span
@@ -468,7 +485,6 @@ export default function ServiceRequestList() {
                       )}
                     </td>
 
-                    {/* Status — inline quick-change dropdown */}
                     <td style={s.td}>
                       <div style={s.statusCell}>
                         <span
@@ -500,7 +516,6 @@ export default function ServiceRequestList() {
                       </div>
                     </td>
 
-                    {/* Order */}
                     <td style={s.td}>
                       <span style={s.orderId}>
                         {req.orderId?.orderNumber
@@ -511,18 +526,19 @@ export default function ServiceRequestList() {
                       </span>
                     </td>
 
-                    {/* Date */}
                     <td style={s.td}>
                       <span style={s.dateText}>
                         {formatDate(req.createdAt)}
                       </span>
                     </td>
 
-                    {/* Actions — View, Edit, Assign only (no Create, no Delete) */}
                     <td style={s.td}>
                       <div style={s.actions}>
+                        {/* View Details — navigates to separate page */}
                         <button
-                          onClick={() => setViewModal(req)}
+                          onClick={() =>
+                            navigate(`/admin/service-requests/${req._id}`)
+                          }
                           style={{ ...s.actionBtn, ...s.viewBtn }}
                           title="View Details"
                         >
@@ -541,9 +557,16 @@ export default function ServiceRequestList() {
                             setAssignTo(req.assignedTo || "");
                           }}
                           style={{ ...s.actionBtn, ...s.assignBtn }}
-                          title="Assign Technician"
+                          title="Assign"
                         >
                           <MdPerson size={15} />
+                        </button>
+                        <button
+                          onClick={() => setDeleteModal(req)}
+                          style={{ ...s.actionBtn, ...s.deleteBtn }}
+                          title="Delete"
+                        >
+                          <MdDelete size={15} />
                         </button>
                       </div>
                     </td>
@@ -554,7 +577,6 @@ export default function ServiceRequestList() {
           </div>
         )}
 
-        {/* Pagination */}
         {!loading && pagination.totalPages > 1 && (
           <div style={s.pagination}>
             <button
@@ -589,264 +611,7 @@ export default function ServiceRequestList() {
         )}
       </div>
 
-      {/* ════════ VIEW MODAL ════════ */}
-      {viewModal && (
-        <div style={s.overlay} onClick={() => setViewModal(null)}>
-          <div
-            style={{ ...s.modal, maxWidth: 640 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={s.modalHeader}>
-              <div>
-                <h2 style={s.modalTitle}>Service Request Details</h2>
-                <span style={s.ticketId}>
-                  #{String(viewModal._id).slice(-6).toUpperCase()}
-                </span>
-              </div>
-              <button onClick={() => setViewModal(null)} style={s.closeBtn}>
-                <MdClose size={20} />
-              </button>
-            </div>
-
-            <div
-              style={{ ...s.modalBody, overflowY: "auto", maxHeight: "70vh" }}
-            >
-              {/* Status + Priority */}
-              <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-                <span
-                  style={{
-                    ...s.badge,
-                    background: STATUS_STYLES[viewModal.status]?.bg,
-                    color: STATUS_STYLES[viewModal.status]?.color,
-                    fontSize: 13,
-                    padding: "5px 14px",
-                  }}
-                >
-                  ● {cap(viewModal.status)}
-                </span>
-                <span
-                  style={{
-                    ...s.badge,
-                    background: PRIORITY_STYLES[viewModal.priority]?.bg,
-                    color: PRIORITY_STYLES[viewModal.priority]?.color,
-                    fontSize: 13,
-                    padding: "5px 14px",
-                  }}
-                >
-                  {cap(viewModal.priority)} Priority
-                </span>
-              </div>
-
-              {/* Grid details */}
-              <div style={s.detailGrid}>
-                <DetailRow label="Product" value={viewModal.productname} />
-                <DetailRow label="Type" value={cap(viewModal.type)} />
-                <DetailRow
-                  label="Preferred Date"
-                  value={formatDate(viewModal.preferredDate)}
-                />
-                <DetailRow
-                  label="Created"
-                  value={formatDate(viewModal.createdAt)}
-                />
-                <DetailRow
-                  label="Order"
-                  value={viewModal.orderId?.orderNumber || "—"}
-                />
-                <DetailRow
-                  label="Assigned To"
-                  value={viewModal.assignedTo || "Not assigned"}
-                />
-                <DetailRow label="Phone" value={viewModal.phone || "—"} />
-                <DetailRow
-                  label="Resolved At"
-                  value={formatDate(viewModal.resolvedAt)}
-                />
-              </div>
-
-              <div style={s.divider} />
-
-              {/* Description */}
-              <div style={s.section}>
-                <div style={s.sectionTitle}>Description</div>
-                <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
-                  {viewModal.description || "—"}
-                </p>
-              </div>
-
-              <div style={s.divider} />
-
-              {/* User Details */}
-              <div style={s.section}>
-                <div style={s.sectionTitle}>
-                  <MdPerson size={15} style={{ marginRight: 6 }} />
-                  User Details
-                </div>
-                <div style={s.userDetailCard}>
-                  <div style={s.userAvatarLg}>
-                    {(viewModal.user?.fullName || viewModal.user?.name || "?")
-                      .charAt(0)
-                      .toUpperCase()}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        fontSize: 16,
-                        color: "#0F172A",
-                        marginBottom: 6,
-                      }}
-                    >
-                      {viewModal.user?.fullName || viewModal.user?.name || "—"}
-                    </div>
-                    <div style={s.userDetailRow}>
-                      <MdEmail size={14} />
-                      {viewModal.user?.email || "—"}
-                    </div>
-                    <div style={s.userDetailRow}>
-                      <MdPhone size={14} />
-                      {viewModal.user?.mobile || viewModal.user?.phone || "—"}
-                    </div>
-                    <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
-                      <span
-                        style={{
-                          ...s.badge,
-                          background: "#F1F5F9",
-                          color: "#475569",
-                          fontSize: 11,
-                        }}
-                      >
-                        {viewModal.user?.role || "user"}
-                      </span>
-                      {viewModal.user?.isVerified && (
-                        <span
-                          style={{
-                            ...s.badge,
-                            background: "#F0FDF4",
-                            color: "#15803D",
-                            fontSize: 11,
-                          }}
-                        >
-                          ✓ Verified
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div style={s.divider} />
-
-              {/* Address */}
-              <div style={s.section}>
-                <div style={s.sectionTitle}>
-                  <MdLocationOn size={15} style={{ marginRight: 6 }} />
-                  Address
-                </div>
-                {viewModal.address ? (
-                  <p style={{ margin: 0, color: "#475569" }}>
-                    {[
-                      viewModal.address.street,
-                      viewModal.address.city,
-                      viewModal.address.state,
-                      viewModal.address.pincode,
-                    ]
-                      .filter(Boolean)
-                      .join(", ")}
-                  </p>
-                ) : (
-                  <p style={{ margin: 0, color: "#94A3B8" }}>—</p>
-                )}
-              </div>
-
-              <div style={s.divider} />
-
-              {/* Payment */}
-              <div style={s.section}>
-                <div style={s.sectionTitle}>Payment Details</div>
-                <div style={s.detailGrid}>
-                  <DetailRow
-                    label="Method"
-                    value={cap(viewModal.paymentdetails?.method)}
-                  />
-                  <DetailRow
-                    label="Amount"
-                    value={
-                      viewModal.paymentdetails?.amount
-                        ? `₹${viewModal.paymentdetails.amount}`
-                        : "—"
-                    }
-                  />
-                  <DetailRow
-                    label="Payment Status"
-                    value={cap(viewModal.paymentdetails?.status)}
-                  />
-                  <DetailRow
-                    label="Transaction ID"
-                    value={viewModal.paymentdetails?.transactionId || "—"}
-                  />
-                </div>
-              </div>
-
-              {/* Admin Remarks */}
-              {viewModal.adminRemarks && (
-                <>
-                  <div style={s.divider} />
-                  <div style={s.section}>
-                    <div style={s.sectionTitle}>Admin Remarks</div>
-                    <p style={{ margin: 0, color: "#475569" }}>
-                      {viewModal.adminRemarks}
-                    </p>
-                  </div>
-                </>
-              )}
-
-              {/* Issue Images */}
-              {viewModal.issueImages?.length > 0 && (
-                <>
-                  <div style={s.divider} />
-                  <div style={s.section}>
-                    <div style={s.sectionTitle}>Issue Images</div>
-                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      {viewModal.issueImages.map((img, i) => (
-                        <img
-                          key={i}
-                          src={img}
-                          alt={`Issue ${i + 1}`}
-                          style={{
-                            width: 80,
-                            height: 80,
-                            objectFit: "cover",
-                            borderRadius: 8,
-                            border: "1px solid #E2E8F0",
-                          }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div style={s.modalFooter}>
-              <button
-                onClick={() => {
-                  setViewModal(null);
-                  openEdit(viewModal._id);
-                }}
-                style={s.primaryBtn}
-              >
-                <MdEdit size={16} /> Edit Request
-              </button>
-              <button onClick={() => setViewModal(null)} style={s.secondaryBtn}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ════════ EDIT MODAL — admin fields only ════════ */}
+      {/* ════════ EDIT MODAL ════════ */}
       {editModal && (
         <div style={s.overlay} onClick={() => setEditModal(null)}>
           <div
@@ -864,11 +629,9 @@ export default function ServiceRequestList() {
                 <MdClose size={20} />
               </button>
             </div>
-
             <div
               style={{ ...s.modalBody, maxHeight: "65vh", overflowY: "auto" }}
             >
-              {/* Status & Priority */}
               <div style={s.formRow}>
                 <div style={s.formField}>
                   <label style={s.formLabel}>Status</label>
@@ -919,8 +682,6 @@ export default function ServiceRequestList() {
                   </select>
                 </div>
               </div>
-
-              {/* Admin Remarks */}
               <div style={{ marginBottom: 14 }}>
                 <label style={s.formLabel}>Admin Remarks</label>
                 <textarea
@@ -934,11 +695,9 @@ export default function ServiceRequestList() {
                   onChange={(e) =>
                     setEditData((p) => ({ ...p, adminRemarks: e.target.value }))
                   }
-                  placeholder="Internal notes for this request..."
+                  placeholder="Internal notes..."
                 />
               </div>
-
-              {/* Preferred Date & Phone */}
               <div style={s.formRow}>
                 <div style={s.formField}>
                   <label style={s.formLabel}>Preferred Date</label>
@@ -962,12 +721,9 @@ export default function ServiceRequestList() {
                     onChange={(e) =>
                       setEditData((p) => ({ ...p, phone: e.target.value }))
                     }
-                    placeholder="Phone number"
                   />
                 </div>
               </div>
-
-              {/* Description */}
               <div style={{ marginBottom: 14 }}>
                 <label style={s.formLabel}>Description</label>
                 <textarea
@@ -983,9 +739,18 @@ export default function ServiceRequestList() {
                   }
                 />
               </div>
-
-              {/* Address */}
-              <div style={{ ...s.sectionTitle, marginBottom: 10 }}>Address</div>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#64748B",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  marginBottom: 10,
+                }}
+              >
+                Address
+              </div>
               <div style={s.formRow}>
                 <div style={{ ...s.formField, flex: 2 }}>
                   <label style={s.formLabel}>Street</label>
@@ -1023,9 +788,16 @@ export default function ServiceRequestList() {
                   />
                 </div>
               </div>
-
-              {/* Payment */}
-              <div style={{ ...s.sectionTitle, marginBottom: 10 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#64748B",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  marginBottom: 10,
+                }}
+              >
                 Payment Details
               </div>
               <div style={s.formRow}>
@@ -1077,7 +849,6 @@ export default function ServiceRequestList() {
                 />
               </div>
             </div>
-
             <div style={s.modalFooter}>
               <button
                 onClick={handleEditSave}
@@ -1139,34 +910,71 @@ export default function ServiceRequestList() {
           </div>
         </div>
       )}
+
+      {/* ════════ DELETE CONFIRM MODAL ════════ */}
+      {deleteModal && (
+        <div style={s.overlay} onClick={() => setDeleteModal(null)}>
+          <div
+            style={{ ...s.modal, maxWidth: 400 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={s.modalHeader}>
+              <h2 style={{ ...s.modalTitle, color: "#B91C1C" }}>
+                Delete Request
+              </h2>
+              <button onClick={() => setDeleteModal(null)} style={s.closeBtn}>
+                <MdClose size={20} />
+              </button>
+            </div>
+            <div style={s.modalBody}>
+              <div style={{ textAlign: "center", padding: "10px 0 20px" }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>🗑️</div>
+                <p
+                  style={{
+                    color: "#1E293B",
+                    fontWeight: 600,
+                    fontSize: 15,
+                    margin: "0 0 8px",
+                  }}
+                >
+                  Are you sure you want to delete this request?
+                </p>
+                <p style={{ color: "#64748B", fontSize: 13, margin: 0 }}>
+                  <strong>{deleteModal.productname}</strong> — #
+                  {String(deleteModal._id).slice(-6).toUpperCase()}
+                </p>
+                <p style={{ color: "#EF4444", fontSize: 12, marginTop: 10 }}>
+                  This action cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div style={s.modalFooter}>
+              <button
+                onClick={handleDelete}
+                disabled={deleteLoading}
+                style={{
+                  ...s.primaryBtn,
+                  background: "#DC2626",
+                  opacity: deleteLoading ? 0.7 : 1,
+                }}
+              >
+                <MdDelete size={16} />{" "}
+                {deleteLoading ? "Deleting…" : "Yes, Delete"}
+              </button>
+              <button
+                onClick={() => setDeleteModal(null)}
+                style={s.secondaryBtn}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── Helper ───────────────────────────────────────────────────────────────────
-function DetailRow({ label, value }) {
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <div
-        style={{
-          fontSize: 11,
-          color: "#94A3B8",
-          fontWeight: 600,
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-          marginBottom: 2,
-        }}
-      >
-        {label}
-      </div>
-      <div style={{ fontSize: 13, color: "#1E293B", fontWeight: 500 }}>
-        {value || "—"}
-      </div>
-    </div>
-  );
-}
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const s = {
   page: {
     padding: "24px",
@@ -1427,6 +1235,7 @@ const s = {
   viewBtn: { background: "#EFF6FF", color: "#2563EB" },
   editBtn: { background: "#F0FDF4", color: "#15803D" },
   assignBtn: { background: "#FFF7ED", color: "#C2410C" },
+  deleteBtn: { background: "#FEF2F2", color: "#B91C1C" },
   pagination: {
     display: "flex",
     justifyContent: "space-between",
@@ -1488,52 +1297,6 @@ const s = {
     display: "flex",
     gap: 10,
     justifyContent: "flex-end",
-  },
-  detailGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: "4px 20px",
-  },
-  divider: { height: 1, background: "#F1F5F9", margin: "16px 0" },
-  section: { marginBottom: 4 },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: 700,
-    color: "#64748B",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    marginBottom: 10,
-    display: "flex",
-    alignItems: "center",
-  },
-  userDetailCard: {
-    display: "flex",
-    gap: 14,
-    alignItems: "flex-start",
-    background: "#F8FAFC",
-    borderRadius: 10,
-    padding: "14px 16px",
-  },
-  userAvatarLg: {
-    width: 48,
-    height: 48,
-    borderRadius: 99,
-    background: "#E0E7FF",
-    color: "#3730A3",
-    fontWeight: 700,
-    fontSize: 20,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  userDetailRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    fontSize: 13,
-    color: "#475569",
-    marginBottom: 5,
   },
   formRow: { display: "flex", gap: 12, marginBottom: 14 },
   formField: { flex: 1, display: "flex", flexDirection: "column", gap: 5 },

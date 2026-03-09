@@ -14,7 +14,7 @@ import {
   MdViewCarousel,
   MdAdminPanelSettings,
   MdCardGiftcard,
-  MdLightbulb,
+  // MdLightbulb,
   MdFilterAlt,
   MdPayments
 } from "react-icons/md";
@@ -142,13 +142,13 @@ const sidebarLinks = [
     match: "/service-requests",
     roles: ["admin"],
   },
-  {
-    label: "Blogs",
-    path: "/blogs",
-    icon: MdArticle,
-    match: "/blogs",
-    roles: ["admin"],
-  },
+  // {
+  //   label: "Blogs",
+  //   path: "/blogs",
+  //   icon: MdArticle,
+  //   match: "/blogs",
+  //   roles: ["admin"],
+  // },
   // {
   //   label: "Roles",
   //   path: "/roles",

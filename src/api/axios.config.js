@@ -2,8 +2,7 @@ import axios from "axios";
 
 // ─── Base URL ─────────────────────────────────────────────────────────────────
 const LOCAL_BASE  = "http://localhost:3000/api";
-const REMOTE_BASE = "http://localhost:3000/api"; // change to render URL in production
-
+const REMOTE_BASE = "http://localhost:3000/api"; 
 const apiBase =
   typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL
     ? String(import.meta.env.VITE_API_BASE_URL).replace(/\/+$/, "")
@@ -16,9 +15,10 @@ export const instance = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// ─── Request Interceptor — token automatically har request mein lagega ────────
+
 instance.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
+  
+  const token = localStorage.getItem("adminToken") || localStorage.getItem("token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -38,9 +38,10 @@ instance.interceptors.response.use(
     } else {
       console.warn("API error:", error.response.status, error.response?.data);
 
-      // Token expire — logout
+    
       if (error.response.status === 401) {
         localStorage.removeItem("token");
+        localStorage.removeItem("adminToken");
         localStorage.removeItem("user");
         // window.location.href = "/login"; // uncomment if needed
       }
